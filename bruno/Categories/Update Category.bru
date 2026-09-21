@@ -1,0 +1,27 @@
+meta {
+  name: Update Category
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{baseUrl}}/api/categories/:categoryId
+  body: json
+  auth: bearer
+}
+
+params:path {
+  categoryId: REPLACE_WITH_CATEGORY_ID
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "name": "Updated Name",
+    "emoji": "🎯",
+    "color": "#FF5733"
+  }
+}

@@ -1,0 +1,19 @@
+meta {
+  name: Delete Entry
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/entries/:entryId
+  body: none
+  auth: bearer
+}
+
+params:path {
+  entryId: REPLACE_WITH_ENTRY_ID
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}

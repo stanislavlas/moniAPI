@@ -1,0 +1,19 @@
+name: "Personal Finance - Backend"
+description: "Kotlin/Spring Boot REST API for Personal Finance app"
+# Bump version on every push so HA shows "Update available" in the add-on store.
+# Use MAJOR.MINOR.PATCH: patch for bug fixes, minor for new features.
+version: "1.0.0"
+slug: "personalfinance-backend"
+init: false
+host_network: true
+arch:
+  - aarch64
+  - amd64
+ports:
+  8080/tcp: 8080
+ports_description:
+  8080/tcp: "REST API"
+options:
+  jwt_secret: "change-me-use-a-random-32-plus-char-string"
+schema:
+  jwt_secret: str

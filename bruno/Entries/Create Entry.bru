@@ -1,0 +1,30 @@
+meta {
+  name: Create Entry
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/entries
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "amount": {
+      "value": 50.00,
+      "currency": "EUR"
+    },
+    "categoryId": "REPLACE_WITH_CATEGORY_ID",
+    "date": "2026-04-17",
+    "name": "Grocery shopping",
+    "note": "Weekly groceries",
+    "type": "EXPENSE",
+    "necessity": "NEED"
+  }
+}

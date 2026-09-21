@@ -1,0 +1,15 @@
+meta {
+  name: Get Household
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/households
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}

@@ -1,0 +1,20 @@
+meta {
+  name: List Entries
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/entries?yearMonth=2026-04
+  body: none
+  auth: bearer
+}
+
+params:query {
+  yearMonth: 2026-04
+  ~household: true
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}

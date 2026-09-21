@@ -1,0 +1,15 @@
+meta {
+  name: Leave Household
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/households/leave
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}

@@ -1,0 +1,34 @@
+meta {
+  name: Update Entry
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{baseUrl}}/api/entries/:entryId
+  body: json
+  auth: bearer
+}
+
+params:path {
+  entryId: REPLACE_WITH_ENTRY_ID
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "amount": {
+      "value": 75.00,
+      "currency": "EUR"
+    },
+    "categoryId": "REPLACE_WITH_CATEGORY_ID",
+    "date": "2026-04-17",
+    "name": "Grocery shopping - Updated",
+    "note": "Weekly groceries - bought extra items",
+    "type": "EXPENSE",
+    "necessity": "NEED"
+  }
+}

@@ -1,0 +1,24 @@
+meta {
+  name: Verify Registration
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/auth/verify
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "code": "000000"
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setVar("accessToken", res.body.accessToken);
+    bru.setVar("refreshToken", res.body.refreshToken);
+  }
+}

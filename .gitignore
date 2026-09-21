@@ -46,3 +46,4 @@ logs/
 
 # Bruno secrets
 bruno/environments/.env
+bruno/environments/HA.bru

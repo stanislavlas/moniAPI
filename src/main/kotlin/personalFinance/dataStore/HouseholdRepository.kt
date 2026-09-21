@@ -11,7 +11,7 @@ import personalFinance.models.internal.MemberRole
 import java.time.Instant
 import java.util.*
 
-private const val HOUSEHOLD_TABLE      = "households"
+private const val HOUSEHOLD_TABLE      = "personalFinance_households"
 private const val HOUSEHOLD_ID_ATTRIBUTE = "householdId"
 private const val NAME_ATTRIBUTE       = "name"
 private const val OWNER_ID_ATTRIBUTE   = "ownerId"

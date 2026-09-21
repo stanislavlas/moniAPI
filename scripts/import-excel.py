@@ -41,7 +41,7 @@ STANISLAV_COLS = {
     "Groceries":    ("Groceries",    "EXPENSE",    "NEED"),
     "Household":    ("Household",    "EXPENSE",    "NEED"),
     "Transport":    ("Transport",    "EXPENSE",    "NEED"),
-    "Moje potreby": ("Clothing",     "EXPENSE",    "WANT"),
+    "Clothing":     ("Clothing",     "EXPENSE",    "WANT"),
     "Multisport":   ("Subscription", "EXPENSE",    "WANT"),
     "Subscription": ("Subscription", "EXPENSE",    "WANT"),
     "Restaurants":  ("Restaurants",  "EXPENSE",    "WANT"),

@@ -7,7 +7,7 @@ import com.fasterxml.jackson.module.kotlin.readValue
 import org.springframework.stereotype.Repository
 import personalFinance.models.internal.VerificationCode
 
-private const val VERIFICATION_TABLE = "verification_codes"
+private const val VERIFICATION_TABLE = "personalFinance_verification_codes"
 private const val CODE_ATTRIBUTE = "code"
 private const val DATA_ATTRIBUTE = "data"
 

@@ -13,7 +13,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.*
 
-private const val ENTRY_TABLE = "entries"
+private const val ENTRY_TABLE = "personalFinance_entries"
 private const val ENTRY_ID_ATTRIBUTE = "entryId"
 private const val USER_ID_ATTRIBUTE = "userId"
 private const val HOUSEHOLD_ID_ATTRIBUTE = "householdId"

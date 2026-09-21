@@ -8,7 +8,7 @@ import personalFinance.models.internal.RefreshToken
 import java.time.Instant
 import java.util.*
 
-private const val REFRESH_TOKEN_TABLE = "refresh_tokens"
+private const val REFRESH_TOKEN_TABLE = "personalFinance_refresh_tokens"
 private const val TOKEN_ID_ATTRIBUTE = "tokenId"
 private const val USER_ID_ATTRIBUTE = "userId"
 private const val TOKEN_HASH_ATTRIBUTE = "tokenHash"

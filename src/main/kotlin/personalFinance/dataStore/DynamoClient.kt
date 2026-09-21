@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component
 import personalFinance.models.internal.User
 import java.util.*
 
-private const val USER_TABLE_NAME = "users"
+private const val USER_TABLE_NAME = "personalFinance_users"
 private const val USERS_SECONDARY_INDEX_NAME = "email-index"
 private const val DATA_ATTRIBUTE = "data"
 private const val USER_ID_ATTRIBUTE = "userId"

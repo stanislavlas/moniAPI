@@ -9,7 +9,7 @@ import personalFinance.models.internal.Category
 import java.time.Instant
 import java.util.*
 
-private const val CATEGORY_TABLE         = "categories"
+private const val CATEGORY_TABLE         = "personalFinance_categories"
 private const val CATEGORY_ID_ATTRIBUTE  = "categoryId"
 private const val OWNER_KEY_ATTRIBUTE    = "ownerKey"
 private const val HOUSEHOLD_ID_ATTRIBUTE = "householdId"

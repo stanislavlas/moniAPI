@@ -2,7 +2,7 @@ name: "Personal Finance API"
 description: "Kotlin/Spring Boot REST API for Personal Finance app"
 # Bump version on every push so HA shows "Update available" in the add-on store.
 # Use MAJOR.MINOR.PATCH: patch for bug fixes, minor for new features.
-version: "1.1.0"
+version: "1.1.1"
 slug: "personalfinance-api"
 init: false
 host_network: true

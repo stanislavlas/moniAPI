@@ -43,3 +43,6 @@ logs/
 
 # Docker
 .docker/
+
+# Bruno secrets
+bruno/environments/.env

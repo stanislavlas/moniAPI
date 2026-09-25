@@ -27,7 +27,7 @@ class HouseholdService(
 
     suspend fun createHousehold(userId: UUID, name: String): Household {
         val user = dataStoreClient.getUserById(userId)
-        if (user.householdId != null) throw Exception("User is already in a household")
+        if (user.householdId != null) throw IllegalArgumentException("User is already in a household")
 
         val household = Household(
             householdId = UUID.randomUUID(),
@@ -118,6 +118,15 @@ class HouseholdService(
     suspend fun assertMembership(userId: UUID, householdId: UUID) {
         val household = householdRepository.findById(householdId)
             ?: throw NoSuchElementException("Household not found")
+        if (household.members.none { it.userId == userId })
+            throw ForbiddenException("User is not a member of this household")
+    }
+
+    /**
+     * Asserts that [userId] is a member of the given [household] (already fetched).
+     * Avoids a second DynamoDB lookup when the caller already has the household object.
+     */
+    fun assertMembership(userId: UUID, household: Household) {
         if (household.members.none { it.userId == userId })
             throw ForbiddenException("User is not a member of this household")
     }

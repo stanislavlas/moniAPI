@@ -12,7 +12,6 @@ data class VerificationCode(
     val code: String,
     val userId: UUID,
     val type: VerificationType,
-    val newEmail: String? = null,
     val expiresAt: Instant,
     val resendCount: Int = 0,
 )

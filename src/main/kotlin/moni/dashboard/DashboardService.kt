@@ -32,10 +32,10 @@ class DashboardService(
         // Get raw entries; also capture the household object to reuse for householdName
         var fetchedHousehold: moni.models.internal.Household? = null
         val rawEntries = if (householdId != null) {
-            // Verify user is member — fetch household once and reuse for householdName later
+            // Fetch household once — reuse for both membership check and householdName (no second DB call)
             fetchedHousehold = householdRepository.findById(householdId)
                 ?: throw NoSuchElementException("Household not found")
-            householdService.assertMembership(userId, householdId)
+            householdService.assertMembership(userId, fetchedHousehold)
             entryRepository.findByHouseholdId(householdId, fromDate, toDate)
         } else {
             entryRepository.findByUserId(userId, fromDate, toDate)

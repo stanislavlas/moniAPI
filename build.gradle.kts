@@ -22,6 +22,7 @@ dependencies {
 	// Spring Boot dependencies
 	implementation("org.springframework.boot:spring-boot-starter-security")
 	implementation("org.springframework.boot:spring-boot-starter-web")
+	implementation("org.springframework.boot:spring-boot-starter-validation")
 
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 	implementation("io.jsonwebtoken:jjwt-api:0.11.5")
@@ -29,11 +30,9 @@ dependencies {
 	runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.11.5") // for JSON processing
 
 	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-	runtimeOnly("org.jetbrains.kotlinx:kotlinx-datetime:0.6.1")
 
 	implementation("aws.sdk.kotlin:dynamodb:1.2.28")
 	implementation("com.squareup.okhttp3:okhttp:5.0.0-alpha.14")
-	implementation("com.squareup.okhttp3:okhttp-coroutines:5.0.0-alpha.14")
 	implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
 
 	testImplementation("org.springframework.boot:spring-boot-starter-test")

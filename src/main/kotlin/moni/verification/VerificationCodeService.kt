@@ -24,14 +24,12 @@ class VerificationCodeService(
         type: VerificationType,
         email: String,
         name: String,
-        newEmail: String? = null,
     ): VerificationCode {
         val code = String.format("%06d", random.nextInt(1_000_000))
         val verificationCode = VerificationCode(
             code = code,
             userId = userId,
             type = type,
-            newEmail = newEmail,
             expiresAt = Instant.now().plusSeconds(CODE_EXPIRY_SECONDS),
         )
         repository.save(verificationCode)
@@ -101,7 +99,6 @@ class VerificationCodeService(
             code = newCodeStr,
             userId = existingCode.userId,
             type = existingCode.type,
-            newEmail = existingCode.newEmail,
             expiresAt = Instant.now().plusSeconds(CODE_EXPIRY_SECONDS),
             resendCount = existingCode.resendCount + 1,
         )

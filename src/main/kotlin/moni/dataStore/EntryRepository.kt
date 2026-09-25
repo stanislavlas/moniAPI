@@ -35,30 +35,10 @@ class EntryRepository(
 ) {
 
     suspend fun save(entry: Entry) {
-        val item = mutableMapOf(
-            ENTRY_ID_ATTRIBUTE to AttributeValue.S(entry.entryId.toString()),
-            USER_ID_ATTRIBUTE to AttributeValue.S(entry.userId.toString()),
-            AMOUNT_VALUE_ATTRIBUTE to AttributeValue.N(entry.amount.value.toString()),
-            AMOUNT_CURRENCY_ATTRIBUTE to AttributeValue.S(entry.amount.currency),
-            CATEGORY_ID_ATTRIBUTE to AttributeValue.S(entry.categoryId.toString()),
-            DATE_ATTRIBUTE to AttributeValue.S(entry.date.toString()),
-            NAME_ATTRIBUTE to AttributeValue.S(entry.name),
-            NOTE_ATTRIBUTE to AttributeValue.S(entry.note),
-            TYPE_ATTRIBUTE to AttributeValue.S(entry.type.name),
-            NECESSITY_ATTRIBUTE to AttributeValue.S(entry.necessity.name),
-            AUTHOR_NAME_ATTRIBUTE to AttributeValue.S(entry.authorName),
-            CREATED_AT_ATTRIBUTE to AttributeValue.N(entry.createdAt.epochSecond.toString())
-        )
-
-        entry.householdId?.let {
-            item[HOUSEHOLD_ID_ATTRIBUTE] = AttributeValue.S(it.toString())
-        }
-
         val request = PutItemRequest {
             tableName = ENTRY_TABLE
-            this.item = item
+            this.item = buildItem(entry)
         }
-
         dynamoClient.putItem(request)
     }
 
@@ -127,23 +107,8 @@ class EntryRepository(
         // DynamoDB BatchWriteItem limit is 25 items per request
         entries.chunked(25).forEach { chunk ->
             val writeRequests = chunk.map { entry ->
-                val item = mutableMapOf(
-                    ENTRY_ID_ATTRIBUTE      to AttributeValue.S(entry.entryId.toString()),
-                    USER_ID_ATTRIBUTE       to AttributeValue.S(entry.userId.toString()),
-                    AMOUNT_VALUE_ATTRIBUTE  to AttributeValue.N(entry.amount.value.toString()),
-                    AMOUNT_CURRENCY_ATTRIBUTE to AttributeValue.S(entry.amount.currency),
-                    CATEGORY_ID_ATTRIBUTE   to AttributeValue.S(entry.categoryId.toString()),
-                    DATE_ATTRIBUTE          to AttributeValue.S(entry.date.toString()),
-                    NAME_ATTRIBUTE          to AttributeValue.S(entry.name),
-                    NOTE_ATTRIBUTE          to AttributeValue.S(entry.note),
-                    TYPE_ATTRIBUTE          to AttributeValue.S(entry.type.name),
-                    NECESSITY_ATTRIBUTE     to AttributeValue.S(entry.necessity.name),
-                    AUTHOR_NAME_ATTRIBUTE   to AttributeValue.S(entry.authorName),
-                    CREATED_AT_ATTRIBUTE    to AttributeValue.N(entry.createdAt.epochSecond.toString())
-                )
-                entry.householdId?.let { item[HOUSEHOLD_ID_ATTRIBUTE] = AttributeValue.S(it.toString()) }
                 WriteRequest {
-                    putRequest = PutRequest { this.item = item }
+                    putRequest = PutRequest { this.item = buildItem(entry) }
                 }
             }
             val request = BatchWriteItemRequest {
@@ -160,6 +125,25 @@ class EntryRepository(
         }
 
         dynamoClient.deleteItem(deleteRequest)
+    }
+
+    private fun buildItem(entry: Entry): MutableMap<String, AttributeValue> {
+        val item = mutableMapOf(
+            ENTRY_ID_ATTRIBUTE        to AttributeValue.S(entry.entryId.toString()),
+            USER_ID_ATTRIBUTE         to AttributeValue.S(entry.userId.toString()),
+            AMOUNT_VALUE_ATTRIBUTE    to AttributeValue.N(entry.amount.value.toString()),
+            AMOUNT_CURRENCY_ATTRIBUTE to AttributeValue.S(entry.amount.currency),
+            CATEGORY_ID_ATTRIBUTE     to AttributeValue.S(entry.categoryId.toString()),
+            DATE_ATTRIBUTE            to AttributeValue.S(entry.date.toString()),
+            NAME_ATTRIBUTE            to AttributeValue.S(entry.name),
+            NOTE_ATTRIBUTE            to AttributeValue.S(entry.note),
+            TYPE_ATTRIBUTE            to AttributeValue.S(entry.type.name),
+            NECESSITY_ATTRIBUTE       to AttributeValue.S(entry.necessity.name),
+            AUTHOR_NAME_ATTRIBUTE     to AttributeValue.S(entry.authorName),
+            CREATED_AT_ATTRIBUTE      to AttributeValue.N(entry.createdAt.epochSecond.toString()),
+        )
+        entry.householdId?.let { item[HOUSEHOLD_ID_ATTRIBUTE] = AttributeValue.S(it.toString()) }
+        return item
     }
 
     private fun mapToEntry(item: Map<String, AttributeValue>): Entry {

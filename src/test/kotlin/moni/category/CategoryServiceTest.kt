@@ -1,4 +1,4 @@
-package personalFinance.category
+package moni.category
 
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -7,9 +7,9 @@ import io.mockk.slot
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
-import personalFinance.dataStore.CategoryRepository
-import personalFinance.models.TransactionType
-import personalFinance.models.internal.Category
+import moni.dataStore.CategoryRepository
+import moni.models.TransactionType
+import moni.models.internal.Category
 import java.util.*
 
 class CategoryServiceTest {

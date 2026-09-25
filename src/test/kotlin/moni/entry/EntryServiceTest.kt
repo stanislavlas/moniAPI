@@ -1,4 +1,4 @@
-package personalFinance.entry
+package moni.entry
 
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -7,15 +7,16 @@ import io.mockk.slot
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
-import personalFinance.currency.CurrencyConversionService
-import personalFinance.dataStore.EntryRepository
-import personalFinance.dataStore.HouseholdRepository
-import personalFinance.dataStore.IDataStoreClient
-import personalFinance.models.Amount
-import personalFinance.models.TransactionType
-import personalFinance.models.internal.Entry
-import personalFinance.models.internal.Necessity
-import personalFinance.models.internal.User
+import moni.currency.CurrencyConversionService
+import moni.dataStore.EntryRepository
+import moni.dataStore.HouseholdRepository
+import moni.dataStore.IDataStoreClient
+import moni.household.HouseholdService
+import moni.models.Amount
+import moni.models.TransactionType
+import moni.models.internal.Entry
+import moni.models.internal.Necessity
+import moni.models.internal.User
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.util.*
@@ -26,12 +27,14 @@ class EntryServiceTest {
     private val householdRepository       = mockk<HouseholdRepository>()
     private val dataStoreClient           = mockk<IDataStoreClient>()
     private val currencyConversionService = mockk<CurrencyConversionService>()
+    private val householdService          = mockk<HouseholdService>()
 
     private val service = EntryService(
         entryRepository,
         householdRepository,
         dataStoreClient,
         currencyConversionService,
+        householdService,
     )
 
     private val userId = UUID.randomUUID()

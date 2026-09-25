@@ -1,4 +1,4 @@
-package personalFinance.user
+package moni.user
 
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -7,9 +7,9 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.security.crypto.password.PasswordEncoder
-import personalFinance.currency.CurrencyConversionService
-import personalFinance.dataStore.IDataStoreClient
-import personalFinance.models.internal.User
+import moni.currency.CurrencyConversionService
+import moni.dataStore.IDataStoreClient
+import moni.models.internal.User
 import java.util.*
 
 class UserServiceTest {

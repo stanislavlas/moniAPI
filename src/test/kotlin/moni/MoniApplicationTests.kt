@@ -1,10 +1,10 @@
-package personalFinance
+package moni
 
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.SpringBootTest
 
 @SpringBootTest
-class PersonalFinanceApplicationTests {
+class MoniApplicationTests {
 
 	@Test
 	fun contextLoads() {

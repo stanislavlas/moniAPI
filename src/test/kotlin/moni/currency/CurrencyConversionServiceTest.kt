@@ -1,10 +1,10 @@
-// backend/src/test/kotlin/personalFinance/currency/CurrencyConversionServiceTest.kt
-package personalFinance.currency
+// backend/src/test/kotlin/moni/currency/CurrencyConversionServiceTest.kt
+package moni.currency
 
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import personalFinance.models.Amount
+import moni.models.Amount
 import java.math.BigDecimal
 
 class CurrencyConversionServiceTest {

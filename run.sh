@@ -6,6 +6,10 @@ bashio::log.info "Starting Personal Finance Backend..."
 JWT_SECRET=$(bashio::config 'jwt_secret')
 export JWT_SECRET
 
+# Read CORS allowed origins from HA add-on options
+CORS_ALLOWED_ORIGINS=$(bashio::config 'cors_allowed_origins')
+export CORS_ALLOWED_ORIGINS
+
 bashio::log.info "Waiting for LocalStack to be reachable..."
 
 until curl -s "http://localhost:4566" > /dev/null 2>&1; do

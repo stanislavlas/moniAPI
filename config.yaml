@@ -2,7 +2,7 @@ name: "Moni API"
 description: "Kotlin/Spring Boot REST API for Moni app"
 # Bump version on every push so HA shows "Update available" in the add-on store.
 # Use MAJOR.MINOR.PATCH: patch for bug fixes, minor for new features.
-version: "1.1.1"
+version: "1.1.2"
 slug: "moni-api"
 init: false
 host_network: true
@@ -15,5 +15,7 @@ ports_description:
   8080/tcp: "REST API"
 options:
   jwt_secret: "change-me-use-a-random-32-plus-char-string"
+  cors_allowed_origins: "http://homeassistant:3000,http://localhost:3000"
 schema:
   jwt_secret: str
+  cors_allowed_origins: str

@@ -7,17 +7,22 @@ import jakarta.servlet.ServletResponse
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Configuration
 import org.springframework.stereotype.Component
 import org.springframework.web.servlet.config.annotation.CorsRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 
 @Configuration
-class WebConfig : WebMvcConfigurer {
+class WebConfig(
+    @Value("\${cors.allowed-origins:http://localhost:3000}")
+    private val allowedOrigins: String,
+) : WebMvcConfigurer {
     override fun addCorsMappings(registry: CorsRegistry) {
+        val origins = allowedOrigins.split(",").map { it.trim() }.toTypedArray()
         registry.addMapping("/**")
-            .allowedOriginPatterns("http://localhost:3000") // Allow React app's URL
-            .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+            .allowedOriginPatterns(*origins)
+            .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
             .allowedHeaders("*")
             .allowCredentials(true)
     }

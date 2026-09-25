@@ -8,14 +8,16 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import moni.dataStore.CategoryRepository
+import moni.dataStore.HouseholdRepository
 import moni.models.TransactionType
 import moni.models.internal.Category
 import java.util.*
 
 class CategoryServiceTest {
 
-    private val repo    = mockk<CategoryRepository>()
-    private val service = CategoryService(repo)
+    private val repo              = mockk<CategoryRepository>()
+    private val householdRepo     = mockk<HouseholdRepository>()
+    private val service           = CategoryService(repo, householdRepo)
 
     private fun cat(householdId: UUID? = null) = Category(
         categoryId  = UUID.randomUUID(),

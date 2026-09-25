@@ -17,8 +17,8 @@ import java.util.concurrent.TimeUnit
 
 @Service
 class CurrencyConversionService(
+    private val objectMapper: ObjectMapper,
     private val httpClient: OkHttpClient = OkHttpClient(),
-    private val objectMapper: ObjectMapper = ObjectMapper(),
 ) {
     private val log = LoggerFactory.getLogger(CurrencyConversionService::class.java)
 

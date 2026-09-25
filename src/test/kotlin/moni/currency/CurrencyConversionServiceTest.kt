@@ -1,6 +1,8 @@
 // backend/src/test/kotlin/moni/currency/CurrencyConversionServiceTest.kt
 package moni.currency
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -13,7 +15,7 @@ class CurrencyConversionServiceTest {
 
     @BeforeEach
     fun setUp() {
-        service = CurrencyConversionService()
+        service = CurrencyConversionService(ObjectMapper().registerKotlinModule())
         // Inject known rates and names to avoid real HTTP calls in unit tests
         service.injectForTest(
             rates = mapOf(

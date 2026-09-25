@@ -73,7 +73,10 @@ class JwtRequestFilter(
 
         if (userId != null && SecurityContextHolder.getContext().authentication == null) {
             val userDetails = userService.getUser(userId = userId) ?: run {
-                filterChain.doFilter(request, response)
+                // User deleted but token still valid — reject with 401
+                response.status = HttpServletResponse.SC_UNAUTHORIZED
+                response.contentType = "application/json"
+                response.writer.write("{\"message\":\"User not found\"}")
                 return
             }
 

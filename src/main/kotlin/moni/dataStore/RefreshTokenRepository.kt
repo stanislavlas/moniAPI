@@ -84,22 +84,7 @@ class RefreshTokenRepository(
         }
     }
 
-    suspend fun deleteByTokenHash(tokenHash: String) {
-        // findByPrefix is not available here (we only have the hash, not the plain token).
-        // This is called from revokeToken which already has the plain token — see RefreshTokenService.
-        // As a fallback we scan, but this path is only hit during logout/revoke (low frequency).
-        val scanRequest = ScanRequest {
-            tableName = REFRESH_TOKEN_TABLE
-            filterExpression = "$TOKEN_HASH_ATTRIBUTE = :hash"
-            expressionAttributeValues = mapOf(":hash" to AttributeValue.S(tokenHash))
-        }
-        val items = dynamoClient.scan(scanRequest).items ?: return
-        items.firstOrNull()?.let { item ->
-            item[TOKEN_ID_ATTRIBUTE]?.asS()?.let { deleteTokenById(it) }
-        }
-    }
-
-    private suspend fun deleteTokenById(tokenId: String) {
+    internal suspend fun deleteTokenById(tokenId: String) {
         dynamoClient.deleteItem(DeleteItemRequest {
             tableName = REFRESH_TOKEN_TABLE
             key = mapOf(TOKEN_ID_ATTRIBUTE to AttributeValue.S(tokenId))

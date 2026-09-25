@@ -9,12 +9,11 @@ data class Household(
     val ownerId: UUID,
     val members: List<HouseholdMember>,
     val createdAt: Instant = Instant.now(),
-    val inviteCode: String? = null
 )
 
 data class HouseholdMember(
     val userId: UUID,
-    val userName: String,
+    val name: String,
     val email: String,
     val role: MemberRole,
     val joinedAt: Instant = Instant.now()

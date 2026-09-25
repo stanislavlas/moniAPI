@@ -21,7 +21,7 @@ class AuthController(
     private val jwtAuth: JwtAuth,
 ) {
     @PostMapping("/login")
-    fun loginAndGetJwt(@RequestBody authRequest: AuthRequest): AuthUserResponse {
+    fun loginAndGetJwt(@Valid @RequestBody authRequest: AuthRequest): AuthUserResponse {
         return authService.getUserWithJwt(
             email = authRequest.email,
             password = authRequest.password,
@@ -111,8 +111,8 @@ class AuthController(
 }
 
 data class AuthRequest(
-    val email: String,
-    val password: String,
+    @field:Email @field:NotBlank val email: String,
+    @field:NotBlank val password: String,
 )
 
 data class CreateRequest(

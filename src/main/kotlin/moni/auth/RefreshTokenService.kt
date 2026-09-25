@@ -2,7 +2,7 @@ package moni.auth
 
 import kotlinx.coroutines.runBlocking
 import org.springframework.scheduling.annotation.Scheduled
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
+import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import moni.dataStore.RefreshTokenRepository
 import moni.models.internal.RefreshToken
@@ -16,7 +16,7 @@ private const val TOKEN_PREFIX_LENGTH = 8
 @Service
 class RefreshTokenService(
     private val refreshTokenRepository: RefreshTokenRepository,
-    private val passwordEncoder: BCryptPasswordEncoder
+    private val passwordEncoder: PasswordEncoder
 ) {
     private val secureRandom = SecureRandom()
 

@@ -13,9 +13,9 @@ import moni.models.Amount
 import moni.models.TransactionType
 import moni.models.internal.Entry
 import moni.models.internal.Necessity
+import java.time.Instant
 import java.time.LocalDate
 import java.util.*
-
 @Service
 class EntryService(
     private val entryRepository: EntryRepository,
@@ -24,6 +24,32 @@ class EntryService(
     private val currencyConversionService: CurrencyConversionService,
     private val householdService: HouseholdService,
 ) {
+    /**
+     * Returns distinct year integers for all years that contain at least one entry.
+     * Sorted ascending. Used to build the year scroller on clients.
+     */
+    suspend fun getActiveYears(userId: UUID, householdId: UUID?): List<Int> {
+        return if (householdId != null) {
+            householdService.assertMembership(userId, householdId)
+            entryRepository.findYearsByHouseholdId(householdId)
+        } else {
+            entryRepository.findYearsByUserId(userId)
+        }
+    }
+
+    /**
+     * Returns deduplicated YYYY-MM strings for all months that contain at least one entry.
+     * Sorted ascending. Used to build the month scroller on clients.
+     */
+    suspend fun getActiveMonths(userId: UUID, householdId: UUID?): List<String> {
+        return if (householdId != null) {
+            householdService.assertMembership(userId, householdId)
+            entryRepository.findMonthsByHouseholdId(householdId)
+        } else {
+            entryRepository.findMonthsByUserId(userId)
+        }
+    }
+
     suspend fun getEntries(
         userId: UUID,
         householdId: UUID?,
@@ -59,42 +85,6 @@ class EntryService(
         }.awaitAll().mapNotNull { (id, name) -> name?.let { id to it } }.toMap()
     }
 
-    suspend fun createEntries(
-        userId: UUID,
-        requests: List<CreateEntryData>
-    ): List<Entry> {
-        val user = dataStoreClient.getUserById(userId)
-
-        val entries = requests.map { req ->
-            val householdUUID = req.householdId?.let { UUID.fromString(it) }
-
-            if (householdUUID != null) {
-                householdService.assertMembership(userId, householdUUID)
-            }
-
-            if (!currencyConversionService.isValidCurrency(req.amount.currency)) {
-                throw IllegalArgumentException("Unknown currency code: ${req.amount.currency}")
-            }
-
-            Entry(
-                entryId = UUID.randomUUID(),
-                userId = userId,
-                householdId = householdUUID,
-                amount = req.amount,
-                categoryId = UUID.fromString(req.categoryId),
-                date = LocalDate.parse(req.date),
-                name = req.name,
-                note = req.note ?: "",
-                type = req.type,
-                necessity = req.necessity,
-                authorName = user.name
-            )
-        }
-
-        entryRepository.batchSave(entries)
-        return entries
-    }
-
     suspend fun createEntry(
         userId: UUID,
         householdId: UUID?,
@@ -112,6 +102,9 @@ class EntryService(
             throw IllegalArgumentException("Unknown currency code: ${amount.currency}")
         }
 
+        // Necessity is only meaningful for EXPENSE entries; enforce a neutral value otherwise.
+        val resolvedNecessity = if (type == TransactionType.EXPENSE) necessity else Necessity.NECESSARY
+
         // If householdId provided, verify user is member
         if (householdId != null) {
             householdService.assertMembership(userId, householdId)
@@ -127,8 +120,9 @@ class EntryService(
             name = name,
             note = note,
             type = type,
-            necessity = necessity,
-            authorName = user.name
+            necessity = resolvedNecessity,
+            authorName = user.name,
+            createdAt = Instant.now(),  // captured here, immediately before save
         )
 
         entryRepository.save(entry)
@@ -166,7 +160,8 @@ class EntryService(
             date = date ?: existing.date,
             name = name ?: existing.name,
             note = note ?: existing.note,
-            necessity = necessity ?: existing.necessity
+            // Only apply provided necessity when entry is (or stays) an EXPENSE.
+            necessity = if (existing.type == TransactionType.EXPENSE) necessity ?: existing.necessity else Necessity.NECESSARY
         )
 
         entryRepository.save(updated)

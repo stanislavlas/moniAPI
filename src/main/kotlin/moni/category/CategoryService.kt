@@ -76,20 +76,7 @@ class CategoryService(
             ?: throw NoSuchElementException("Category not found")
         if (existing.isDefault) throw IllegalArgumentException("Cannot modify a default category")
 
-        // Ownership check: personal category must be owned by this user;
-        // household category must belong to a household this user is a member of
-        val expectedPersonalKey = "user:$userId"
-        val ownerKey = existing.ownerKey
-        if (ownerKey != null && !ownerKey.startsWith("household:") && ownerKey != expectedPersonalKey) {
-            throw ForbiddenException("Not authorized to update this category")
-        }
-        if (ownerKey != null && ownerKey.startsWith("household:") && existing.householdId != null) {
-            val household = householdRepository.findById(existing.householdId)
-                ?: throw NoSuchElementException("Household not found")
-            if (household.members.none { it.userId == userId }) {
-                throw ForbiddenException("Not authorized to update this category")
-            }
-        }
+        assertCategoryOwnership(existing, userId)
 
         val updated = existing.copy(
             name  = name  ?: existing.name,
@@ -105,20 +92,26 @@ class CategoryService(
             ?: throw NoSuchElementException("Category not found")
         if (category.isDefault) throw IllegalArgumentException("Cannot delete a default category")
 
-        // Ownership check: personal category must be owned by this user;
-        // household category must belong to a household this user is a member of
-        val expectedPersonalKey = "user:$userId"
-        val ownerKey = category.ownerKey
-        if (ownerKey != null && !ownerKey.startsWith("household:") && ownerKey != expectedPersonalKey) {
-            throw ForbiddenException("Not authorized to delete this category")
-        }
-        if (ownerKey != null && ownerKey.startsWith("household:") && category.householdId != null) {
+        assertCategoryOwnership(category, userId)
+
+        categoryRepository.delete(categoryId)
+    }
+
+    /**
+     * Verify that [userId] is allowed to modify [category].
+     * - Personal category: ownerKey must match "user:$userId".
+     * - Household category: user must be a member of the category's household.
+     * Throws [ForbiddenException] on violation.
+     */
+    private suspend fun assertCategoryOwnership(category: Category, userId: UUID) {
+        val ownerKey = category.ownerKey ?: return // global categories have no ownerKey — skip
+        if (!ownerKey.startsWith("household:")) {
+            if (ownerKey != "user:$userId") throw ForbiddenException("Not authorized to modify this category")
+        } else if (category.householdId != null) {
             val household = householdRepository.findById(category.householdId)
                 ?: throw NoSuchElementException("Household not found")
-            if (household.members.none { it.userId == userId }) {
-                throw ForbiddenException("Not authorized to delete this category")
-            }
+            if (household.members.none { it.userId == userId })
+                throw ForbiddenException("Not authorized to modify this category")
         }
-        categoryRepository.delete(categoryId)
     }
 }

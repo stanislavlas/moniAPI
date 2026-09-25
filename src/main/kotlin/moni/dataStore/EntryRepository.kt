@@ -2,7 +2,6 @@ package moni.dataStore
 
 import aws.sdk.kotlin.services.dynamodb.DynamoDbClient
 import aws.sdk.kotlin.services.dynamodb.model.*
-import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.stereotype.Repository
 import moni.models.Amount
 import moni.models.TransactionType
@@ -31,7 +30,6 @@ private const val CREATED_AT_ATTRIBUTE = "createdAt"
 @Repository
 class EntryRepository(
     private val dynamoClient: DynamoDbClient,
-    private val objectMapper: ObjectMapper,
 ) {
 
     suspend fun save(entry: Entry) {
@@ -102,20 +100,76 @@ class EntryRepository(
         return items.map { mapToEntry(it) }
     }
 
-    suspend fun batchSave(entries: List<Entry>) {
-        if (entries.isEmpty()) return
-        // DynamoDB BatchWriteItem limit is 25 items per request
-        entries.chunked(25).forEach { chunk ->
-            val writeRequests = chunk.map { entry ->
-                WriteRequest {
-                    putRequest = PutRequest { this.item = buildItem(entry) }
-                }
-            }
-            val request = BatchWriteItemRequest {
-                requestItems = mapOf(ENTRY_TABLE to writeRequests)
-            }
-            dynamoClient.batchWriteItem(request)
+    /**
+     * Returns distinct year integers that have at least one entry for [userId].
+     * Uses a ProjectionExpression to fetch only the date attribute — minimal data transfer.
+     */
+    suspend fun findYearsByUserId(userId: UUID): List<Int> =
+        queryDistinctDatePrefixes(
+            indexName = "userId-date-index",
+            keyAttr   = USER_ID_ATTRIBUTE,
+            keyValue  = userId.toString(),
+            take      = 4,
+        ).mapNotNull { it.toIntOrNull() }.distinct().sorted()
+
+    /**
+     * Returns distinct year integers that have at least one entry for [householdId].
+     * Uses a ProjectionExpression to fetch only the date attribute — minimal data transfer.
+     */
+    suspend fun findYearsByHouseholdId(householdId: UUID): List<Int> =
+        queryDistinctDatePrefixes(
+            indexName = "householdId-date-index",
+            keyAttr   = HOUSEHOLD_ID_ATTRIBUTE,
+            keyValue  = householdId.toString(),
+            take      = 4,
+        ).mapNotNull { it.toIntOrNull() }.distinct().sorted()
+
+    /**
+     * Returns distinct YYYY-MM month keys that have at least one entry for [userId].
+     * Uses a ProjectionExpression to fetch only the date attribute — minimal data transfer.
+     */
+    suspend fun findMonthsByUserId(userId: UUID): List<String> =
+        queryDistinctDatePrefixes(
+            indexName = "userId-date-index",
+            keyAttr   = USER_ID_ATTRIBUTE,
+            keyValue  = userId.toString(),
+            take      = 7,
+        ).distinct().sorted()
+
+    /**
+     * Returns distinct YYYY-MM month keys that have at least one entry for [householdId].
+     * Uses a ProjectionExpression to fetch only the date attribute — minimal data transfer.
+     */
+    suspend fun findMonthsByHouseholdId(householdId: UUID): List<String> =
+        queryDistinctDatePrefixes(
+            indexName = "householdId-date-index",
+            keyAttr   = HOUSEHOLD_ID_ATTRIBUTE,
+            keyValue  = householdId.toString(),
+            take      = 7,
+        ).distinct().sorted()
+
+    /**
+     * Shared helper: queries [indexName] for all items matching [keyAttr] = [keyValue],
+     * fetches only the DATE_ATTRIBUTE, and returns the leading [take] characters of each
+     * date string (e.g. take=4 → year "2024", take=7 → month "2024-03").
+     */
+    private suspend fun queryDistinctDatePrefixes(
+        indexName: String,
+        keyAttr: String,
+        keyValue: String,
+        take: Int,
+    ): List<String> {
+        val queryRequest = QueryRequest {
+            tableName = ENTRY_TABLE
+            this.indexName = indexName
+            keyConditionExpression = "$keyAttr = :keyValue"
+            expressionAttributeValues = mapOf(":keyValue" to AttributeValue.S(keyValue))
+            projectionExpression = "#dateAttr"
+            expressionAttributeNames = mapOf("#dateAttr" to DATE_ATTRIBUTE)
         }
+        return dynamoClient.query(queryRequest).items
+            ?.mapNotNull { it[DATE_ATTRIBUTE]?.asS()?.take(take) }
+            ?: emptyList()
     }
 
     suspend fun delete(entryId: UUID) {
@@ -162,7 +216,7 @@ class EntryRepository(
             name = item[NAME_ATTRIBUTE]?.asS() ?: throw Exception("Missing name"),
             note = item[NOTE_ATTRIBUTE]?.asS() ?: "",
             type = TransactionType.valueOf(item[TYPE_ATTRIBUTE]?.asS() ?: throw Exception("Missing type")),
-            necessity = Necessity.valueOf(item[NECESSITY_ATTRIBUTE]?.asS() ?: throw Exception("Missing necessity")),
+            necessity = Necessity.fromString(item[NECESSITY_ATTRIBUTE]?.asS() ?: throw Exception("Missing necessity")),
             authorName = item[AUTHOR_NAME_ATTRIBUTE]?.asS() ?: throw Exception("Missing authorName"),
             createdAt = Instant.ofEpochSecond(item[CREATED_AT_ATTRIBUTE]?.asN()?.toLong() ?: throw Exception("Missing createdAt"))
         )

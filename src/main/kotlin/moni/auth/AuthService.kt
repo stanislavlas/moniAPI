@@ -68,7 +68,13 @@ class AuthService(
             if (user.emailVerified) {
                 throw IllegalArgumentException("User with email $email already exists")
             }
-            // Unverified user — clean up stale record and allow re-registration
+            // Unverified user — clean up stale record and allow re-registration.
+            // NOTE: There is a potential TOCTOU race here: two concurrent registrations for the
+            // same email could both pass the existence check and both attempt to delete + create.
+            // DynamoDB does not support compare-and-delete atomically. The worst-case outcome is
+            // two user records being written for the same email, which the GSI unique constraint
+            // (if configured) would catch. For now this window is accepted as very low probability
+            // in a personal-finance app with low concurrent traffic.
             runBlocking {
                 verificationCodeService.deleteAllForUser(user.userId)
                 dataStore.deleteUser(user.userId)

@@ -3,6 +3,7 @@ package moni.config
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -23,6 +24,17 @@ class ForbiddenException(message: String) : RuntimeException(message)
 @ControllerAdvice
 class GlobalExceptionHandler {
     private val logger = LoggerFactory.getLogger(GlobalExceptionHandler::class.java)
+
+    /** Malformed JSON request body → 400 with a safe generic message (no internals exposed). */
+    @ExceptionHandler(HttpMessageNotReadableException::class)
+    fun handleNotReadable(ex: HttpMessageNotReadableException, request: WebRequest): ResponseEntity<ErrorResponse> {
+        logger.warn("Malformed request body at ${request.getDescription(false)}: ${ex.message}")
+        val errorResponse = ErrorResponse(
+            message = "Malformed or missing request body",
+            details = request.getDescription(false).replace("uri=", "")
+        )
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse)
+    }
 
     @ExceptionHandler(Exception::class)
     fun handleAllExceptions(ex: Exception, request: WebRequest): ResponseEntity<ErrorResponse> {

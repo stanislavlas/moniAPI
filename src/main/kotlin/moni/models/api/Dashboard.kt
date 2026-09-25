@@ -8,13 +8,13 @@ data class DashboardResponse(
     val totalExpenses: Amount,
     val totalInvestments: Amount,
     val savedAmount: Amount,
-    val needsVsWants: NeedsVsWantsBreakdown,
+    val necessaryVsOptional: NecessaryVsOptionalBreakdown,
     val expensesByCategory: Map<String, Amount>,
     val recentEntries: List<Entry>,
     val householdName: String?
 )
 
-data class NeedsVsWantsBreakdown(
-    val needs: Amount,
-    val wants: Amount
+data class NecessaryVsOptionalBreakdown(
+    val necessary: Amount,
+    val optional: Amount,
 )

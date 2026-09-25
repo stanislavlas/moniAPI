@@ -39,10 +39,16 @@ aws --endpoint-url=$ENDPOINT dynamodb create-table \
   --attribute-definitions \
     AttributeName=tokenId,AttributeType=S \
     AttributeName=userId,AttributeType=S \
+    AttributeName=tokenPrefix,AttributeType=S \
   --global-secondary-indexes '[
     {
       "IndexName": "userId-index",
       "KeySchema": [{"AttributeName": "userId", "KeyType": "HASH"}],
+      "Projection": {"ProjectionType": "ALL"}
+    },
+    {
+      "IndexName": "tokenPrefix-index",
+      "KeySchema": [{"AttributeName": "tokenPrefix", "KeyType": "HASH"}],
       "Projection": {"ProjectionType": "ALL"}
     }
   ]' \

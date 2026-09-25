@@ -1,6 +1,6 @@
-# PersonalFinanceAPI
+# MoniAPI
 
-Kotlin 1.9.25 / Spring Boot 3.3.4 REST API for the Personal Finance app.
+Kotlin 1.9.25 / Spring Boot 3.3.4 REST API for the Moni app.
 Designed to run as a Home Assistant add-on or standalone.
 
 ## Tech Stack
@@ -16,7 +16,7 @@ Designed to run as a Home Assistant add-on or standalone.
 ### Prerequisites
 
 - Java 21
-- LocalStack running — see [LocalStack](https://github.com/stanislavlas/LocalStack)
+- LocalStack running — see [LocalStack](https://github.com/stanislavlas/localStack)
 
 ### Run locally
 
@@ -96,14 +96,14 @@ cd scripts
 
 ## Home Assistant Add-on
 
-Install **Personal Finance - Backend** from the add-on store.
+Install **Moni - Backend** from the add-on store.
 Set `jwt_secret` in the Configuration tab (generate with `openssl rand -base64 32`).
 Start LocalStack add-on first.
 
 ## Package Structure
 
 ```
-src/main/kotlin/personalFinance/
+src/main/kotlin/moni/
 ├── auth/          # JWT auth, login, register, refresh tokens
 ├── category/      # Category CRUD + default seeding
 ├── entry/         # Transaction CRUD

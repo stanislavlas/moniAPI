@@ -1,6 +1,7 @@
 package moni.models.api
 
 import moni.models.Currency
+import moni.models.internal.MemberRole
 import java.util.*
 
 data class AuthUserResponse(
@@ -20,6 +21,8 @@ data class User(
     val email: String,
     val name: String,
     val userId: UUID,
+    val householdId: UUID? = null,
+    val householdRole: MemberRole? = null,
     val notificationsEnabled: Boolean = false,
     val notificationFrequency: String = "daily",
     val notificationCustomDays: Int = 1,

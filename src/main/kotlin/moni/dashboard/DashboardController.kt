@@ -32,6 +32,7 @@ class DashboardController(
                 catch (_: DateTimeParseException) { throw IllegalArgumentException("Invalid fromDate format. Expected YYYY-MM-DD, got: $fromDate") }
             val parsedTo   = try { LocalDate.parse(toDate) }
                 catch (_: DateTimeParseException) { throw IllegalArgumentException("Invalid toDate format. Expected YYYY-MM-DD, got: $toDate") }
+            if (parsedFrom.isAfter(parsedTo)) throw IllegalArgumentException("fromDate ($fromDate) must not be after toDate ($toDate)")
             dashboardService.getDashboard(
                 userId         = userId,
                 householdId    = householdId,

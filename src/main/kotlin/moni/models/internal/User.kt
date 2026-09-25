@@ -12,7 +12,7 @@ data class User(
     val userId: UUID,
     val householdId: UUID? = null,
     val householdRole: MemberRole? = null,
-    val emailVerified: Boolean = true,
+    val emailVerified: Boolean = false,
     val notificationsEnabled: Boolean = false,
     val notificationFrequency: String = "daily",   // "daily" | "weekly" | "monthly" | "custom"
     val notificationCustomDays: Int = 1,            // used when frequency == "custom"
@@ -23,6 +23,8 @@ data class User(
         email = this.email,
         name = this.name,
         userId = this.userId,
+        householdId = this.householdId,
+        householdRole = this.householdRole,
         notificationsEnabled = this.notificationsEnabled,
         notificationFrequency = this.notificationFrequency,
         notificationCustomDays = this.notificationCustomDays,

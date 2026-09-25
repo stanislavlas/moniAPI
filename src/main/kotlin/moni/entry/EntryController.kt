@@ -24,24 +24,63 @@ class EntryController(
     private val jwtAuth: JwtAuth,
     private val dataStoreClient: IDataStoreClient,
 ) {
+    /**
+     * Returns the distinct year integers that contain at least one entry.
+     * Clients use this to populate the year scroller without fetching full entry data.
+     */
+    @GetMapping("/years")
+    fun getActiveYears(
+        @RequestHeader("Authorization") authorization: String,
+        @RequestParam(required = false, defaultValue = "false") household: Boolean
+    ): List<Int> {
+        val userId = authorization.getUserId(jwtAuth)
+        return runBlocking {
+            val user = dataStoreClient.getUserById(userId)
+            val householdId = if (household) user.householdId else null
+            entryService.getActiveYears(userId = userId, householdId = householdId)
+        }
+    }
+
+    /**
+     * Returns the distinct YYYY-MM month keys that contain at least one entry.
+     * Clients use this to populate the month scroller without fetching full entry data.
+     */
+    @GetMapping("/months")
+    fun getActiveMonths(
+        @RequestHeader("Authorization") authorization: String,
+        @RequestParam(required = false, defaultValue = "false") household: Boolean
+    ): List<String> {
+        val userId = authorization.getUserId(jwtAuth)
+        return runBlocking {
+            val user = dataStoreClient.getUserById(userId)
+            val householdId = if (household) user.householdId else null
+            entryService.getActiveMonths(userId = userId, householdId = householdId)
+        }
+    }
+
     @GetMapping
     fun getEntries(
         @RequestHeader("Authorization") authorization: String,
         @RequestParam(required = false) yearMonth: String?,
+        @RequestParam(required = false) year: Int?,
         @RequestParam(required = false, defaultValue = "false") household: Boolean
     ): List<Entry> {
         val userId = authorization.getUserId(jwtAuth)
 
-        val (fromDate, toDate) = if (yearMonth != null) {
-            try {
-                val ym = YearMonth.parse(yearMonth)
-                val from = ym.atDay(1)
-                Pair(from, ym.atEndOfMonth())
-            } catch (_: DateTimeParseException) {
-                throw IllegalArgumentException("Invalid yearMonth format. Expected YYYY-MM, got: $yearMonth")
+        val (fromDate, toDate) = when {
+            yearMonth != null -> {
+                try {
+                    val ym = YearMonth.parse(yearMonth)
+                    Pair(ym.atDay(1), ym.atEndOfMonth())
+                } catch (_: DateTimeParseException) {
+                    throw IllegalArgumentException("Invalid yearMonth format. Expected YYYY-MM, got: $yearMonth")
+                }
             }
-        } else {
-            Pair(null, null)
+            year != null -> {
+                if (year < 1900 || year > 9999) throw IllegalArgumentException("Invalid year: $year")
+                Pair(java.time.LocalDate.of(year, 1, 1), java.time.LocalDate.of(year, 12, 31))
+            }
+            else -> Pair(null, null)
         }
 
         return runBlocking {
@@ -53,33 +92,6 @@ class EntryController(
                 fromDate       = fromDate,
                 toDate         = toDate,
                 targetCurrency = user.currency,
-            )
-        }
-    }
-
-    @PostMapping("/batch")
-    fun createEntries(
-        @RequestHeader("Authorization") authorization: String,
-        @RequestBody requests: List<CreateEntryRequest>
-    ): List<Entry> {
-        val userId = authorization.getUserId(jwtAuth)
-
-        return runBlocking {
-            val user = dataStoreClient.getUserById(userId)
-            entryService.createEntries(
-                userId = userId,
-                requests = requests.map { req ->
-                    CreateEntryData(
-                        householdId = user.householdId?.toString(),
-                        amount      = req.amount,
-                        categoryId  = req.categoryId,
-                        date        = req.date,
-                        name        = req.name,
-                        note        = req.note,
-                        type        = req.type,
-                        necessity   = req.necessity
-                    )
-                }
             )
         }
     }
@@ -155,18 +167,6 @@ data class CreateEntryRequest(
     @field:NotBlank val categoryId: String,
     @field:NotBlank val date: String,
     @field:NotBlank val name: String,
-    val note: String?,
-    val type: TransactionType,
-    val necessity: Necessity
-)
-
-/** Shared data carrier used by both single and batch service methods. */
-data class CreateEntryData(
-    val householdId: String?,
-    val amount: Amount,
-    val categoryId: String,
-    val date: String,
-    val name: String,
     val note: String?,
     val type: TransactionType,
     val necessity: Necessity

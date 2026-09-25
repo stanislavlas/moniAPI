@@ -26,6 +26,9 @@ class HouseholdInvitationService(
         if (household.members.any { it.email.equals(invitedEmail, ignoreCase = true) })
             throw IllegalArgumentException("That user is already a member of this household")
 
+        dataStoreClient.getUserByEmail(invitedEmail.lowercase())
+            ?: throw IllegalArgumentException("No account found for that email address")
+
         val existing = invitationRepository.findByInvitedEmail(invitedEmail.lowercase())
             .firstOrNull { it.householdId == household.householdId && it.status == InvitationStatus.PENDING }
         if (existing != null) throw IllegalArgumentException("A pending invitation already exists for that email")

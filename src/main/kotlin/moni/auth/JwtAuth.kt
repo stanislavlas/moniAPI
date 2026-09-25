@@ -5,8 +5,8 @@ import io.jsonwebtoken.SignatureAlgorithm
 import jakarta.annotation.PostConstruct
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import java.time.LocalDateTime
-import java.time.ZoneId
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.*
 import javax.crypto.SecretKey
 import javax.crypto.spec.SecretKeySpec
@@ -34,11 +34,11 @@ class JwtAuth(
     }
 
     fun generateJWT(userId: UUID): String {
-        val now = LocalDateTime.now()
+        val now = Instant.now()
         return Jwts.builder()
             .setSubject(userId.toString())
-            .setIssuedAt(now.toDate())
-            .setExpiration(now.plusMinutes(15).toDate()) // 15 minutes for access token
+            .setIssuedAt(Date.from(now))
+            .setExpiration(Date.from(now.plus(15, ChronoUnit.MINUTES)))
             .signWith(getSigningKey(), SignatureAlgorithm.HS256)
             .compact()
     }
@@ -62,6 +62,4 @@ class JwtAuth(
 
         return UUID.fromString(userIdString)
     }
-
-    private fun LocalDateTime.toDate() = Date.from(this.atZone(ZoneId.systemDefault()).toInstant())
 }

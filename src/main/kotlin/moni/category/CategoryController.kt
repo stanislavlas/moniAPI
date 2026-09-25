@@ -41,8 +41,8 @@ class CategoryController(
                 userId      = userId,
                 householdId = user.householdId,   // null → personal, non-null → household
                 name        = request.name,
-                emoji       = request.emoji,
-                color       = request.color,
+                emoji       = request.resolvedEmoji,
+                color       = request.resolvedColor,
                 type        = request.type,
             )
         }
@@ -84,10 +84,14 @@ class CategoryController(
 
 data class CreateCategoryRequest(
     val name: String,
-    val emoji: String,
-    val color: String,
     val type: TransactionType,
-)
+    val emoji: String? = null,
+    val icon: String? = null,   // web clients send "icon" — treated as an alias for emoji
+    val color: String? = null,
+) {
+    val resolvedEmoji: String get() = (emoji ?: icon ?: "").trim()
+    val resolvedColor: String get() = (color ?: "").trim()
+}
 
 data class UpdateCategoryRequest(
     val name: String?,

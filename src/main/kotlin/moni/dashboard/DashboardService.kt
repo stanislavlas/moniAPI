@@ -8,12 +8,16 @@ import moni.household.HouseholdService
 import moni.models.Amount
 import moni.models.TransactionType
 import moni.models.api.DashboardResponse
-import moni.models.api.NeedsVsWantsBreakdown
+import moni.models.api.NecessaryVsOptionalBreakdown
 import moni.models.internal.Entry
 import moni.models.internal.Necessity
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.util.*
+
+/** Sums the amount values of a list of entries. */
+private fun List<Entry>.sumAmountValues(): BigDecimal =
+    fold(BigDecimal.ZERO) { acc, entry -> acc + entry.amount.value }
 
 @Service
 class DashboardService(
@@ -47,29 +51,20 @@ class DashboardService(
         }
 
         // Calculate totals by type
-        val income = entries.filter { it.type == TransactionType.INCOME }
-            .fold(BigDecimal.ZERO) { acc, entry -> acc + entry.amount.value }
-
-        val expenses = entries.filter { it.type == TransactionType.EXPENSE }
-            .fold(BigDecimal.ZERO) { acc, entry -> acc + entry.amount.value }
-
-        val investments = entries.filter { it.type == TransactionType.INVESTMENT }
-            .fold(BigDecimal.ZERO) { acc, entry -> acc + entry.amount.value }
+        val income      = entries.filter { it.type == TransactionType.INCOME      }.sumAmountValues()
+        val expenses    = entries.filter { it.type == TransactionType.EXPENSE     }.sumAmountValues()
+        val investments = entries.filter { it.type == TransactionType.INVESTMENT  }.sumAmountValues()
 
         // Calculate needs vs wants
-        val needs = entries.filter { it.type == TransactionType.EXPENSE && it.necessity == Necessity.NEED }
-            .fold(BigDecimal.ZERO) { acc, entry -> acc + entry.amount.value }
-
-        val wants = entries.filter { it.type == TransactionType.EXPENSE && it.necessity == Necessity.WANT }
-            .fold(BigDecimal.ZERO) { acc, entry -> acc + entry.amount.value }
+        val needs = entries.filter { it.type == TransactionType.EXPENSE && it.necessity == Necessity.NECESSARY }.sumAmountValues()
+        val wants = entries.filter { it.type == TransactionType.EXPENSE && it.necessity == Necessity.OPTIONAL  }.sumAmountValues()
 
         // Group expenses by category
         val expensesByCategory = entries
             .filter { it.type == TransactionType.EXPENSE }
             .groupBy { it.categoryId.toString() }
             .mapValues { (_, categoryEntries) ->
-                val total = categoryEntries.fold(BigDecimal.ZERO) { acc, entry -> acc + entry.amount.value }
-                Amount(total, targetCurrency)
+                Amount(categoryEntries.sumAmountValues(), targetCurrency)
             }
 
         // Get recent entries (last 10)
@@ -85,9 +80,9 @@ class DashboardService(
             totalExpenses = Amount(expenses, targetCurrency),
             totalInvestments = Amount(investments, targetCurrency),
             savedAmount = Amount(income - expenses - investments, targetCurrency),
-            needsVsWants = NeedsVsWantsBreakdown(
-                needs = Amount(needs, targetCurrency),
-                wants = Amount(wants, targetCurrency)
+            necessaryVsOptional = NecessaryVsOptionalBreakdown(
+                necessary = Amount(needs, targetCurrency),
+                optional  = Amount(wants, targetCurrency),
             ),
             expensesByCategory = expensesByCategory,
             recentEntries = recentEntries,

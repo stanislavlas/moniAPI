@@ -1,7 +1,6 @@
 package moni.user
 
 import kotlinx.coroutines.runBlocking
-import org.springframework.context.annotation.Lazy
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import moni.currency.CurrencyConversionService
@@ -13,7 +12,7 @@ import java.util.*
 class UserService(
     private val dataStoreClient: IDataStoreClient,
     private val currencyConversionService: CurrencyConversionService,
-    @Lazy private val passwordEncoder: PasswordEncoder,
+    private val passwordEncoder: PasswordEncoder,
 ) {
 
     fun getUser(userId: UUID): User? {

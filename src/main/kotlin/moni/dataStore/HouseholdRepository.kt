@@ -17,7 +17,6 @@ private const val NAME_ATTRIBUTE       = "name"
 private const val OWNER_ID_ATTRIBUTE   = "ownerId"
 private const val MEMBERS_ATTRIBUTE    = "members"
 private const val CREATED_AT_ATTRIBUTE = "createdAt"
-private const val INVITE_CODE_ATTRIBUTE = "inviteCode"
 
 @Repository
 class HouseholdRepository(
@@ -33,7 +32,6 @@ class HouseholdRepository(
             MEMBERS_ATTRIBUTE      to AttributeValue.S(objectMapper.writeValueAsString(household.members)),
             CREATED_AT_ATTRIBUTE   to AttributeValue.N(household.createdAt.epochSecond.toString()),
         )
-        household.inviteCode?.let { item[INVITE_CODE_ATTRIBUTE] = AttributeValue.S(it) }
 
         dynamoClient.putItem(PutItemRequest { tableName = HOUSEHOLD_TABLE; this.item = item })
     }
@@ -63,7 +61,6 @@ class HouseholdRepository(
             ownerId     = UUID.fromString(item[OWNER_ID_ATTRIBUTE]?.asS() ?: error("Missing ownerId")),
             members     = members,
             createdAt   = Instant.ofEpochSecond(item[CREATED_AT_ATTRIBUTE]?.asN()?.toLong() ?: error("Missing createdAt")),
-            inviteCode  = item[INVITE_CODE_ATTRIBUTE]?.asS(),
         )
     }
 }

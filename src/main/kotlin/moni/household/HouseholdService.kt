@@ -8,7 +8,6 @@ import moni.dataStore.IDataStoreClient
 import moni.models.internal.Household
 import moni.models.internal.HouseholdMember
 import moni.models.internal.MemberRole
-import java.security.SecureRandom
 import java.util.*
 
 @Service
@@ -17,7 +16,6 @@ class HouseholdService(
     private val dataStoreClient: IDataStoreClient,
     private val categoryService: CategoryService,
 ) {
-    private val secureRandom = SecureRandom()
 
     suspend fun getHouseholdByUserId(userId: UUID): Household? {
         val user = dataStoreClient.getUserById(userId)
@@ -34,7 +32,6 @@ class HouseholdService(
             name        = name,
             ownerId     = userId,
             members     = listOf(HouseholdMember(userId, user.name, user.email, MemberRole.OWNER)),
-            inviteCode  = generateInviteCode(),
         )
         householdRepository.save(household)
         categoryService.assignToHousehold(userId, household.householdId)
@@ -104,11 +101,6 @@ class HouseholdService(
         categoryService.restoreToUser(userId, householdId)
         val user = dataStoreClient.getUserById(userId)
         dataStoreClient.putUser(user.copy(householdId = null, householdRole = null))
-    }
-
-    private fun generateInviteCode(): String {
-        val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-        return (1..6).map { chars[secureRandom.nextInt(chars.length)] }.joinToString("")
     }
 
     /**

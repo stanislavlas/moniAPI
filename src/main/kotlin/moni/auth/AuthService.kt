@@ -158,7 +158,6 @@ class AuthService(
 
     suspend fun deleteUserAccount(userId: UUID, password: String) {
         val user = dataStore.getUserById(userId)
-            ?: throw NoSuchElementException("User not found")
 
         val isPasswordMatch = verifyPassword(
             rawPassword = password,

@@ -46,8 +46,6 @@ class DashboardService(
             entry.copy(amount = currencyConversionService.convertAmount(entry.amount, targetCurrency))
         }
 
-        val currency = targetCurrency
-
         // Calculate totals by type
         val income = entries.filter { it.type == TransactionType.INCOME }
             .fold(BigDecimal.ZERO) { acc, entry -> acc + entry.amount.value }
@@ -71,7 +69,7 @@ class DashboardService(
             .groupBy { it.categoryId.toString() }
             .mapValues { (_, categoryEntries) ->
                 val total = categoryEntries.fold(BigDecimal.ZERO) { acc, entry -> acc + entry.amount.value }
-                Amount(total, currency)
+                Amount(total, targetCurrency)
             }
 
         // Get recent entries (last 10)
@@ -83,13 +81,13 @@ class DashboardService(
         val householdName = fetchedHousehold?.name
 
         return DashboardResponse(
-            totalIncome = Amount(income, currency),
-            totalExpenses = Amount(expenses, currency),
-            totalInvestments = Amount(investments, currency),
-            savedAmount = Amount(income - expenses - investments, currency),
+            totalIncome = Amount(income, targetCurrency),
+            totalExpenses = Amount(expenses, targetCurrency),
+            totalInvestments = Amount(investments, targetCurrency),
+            savedAmount = Amount(income - expenses - investments, targetCurrency),
             needsVsWants = NeedsVsWantsBreakdown(
-                needs = Amount(needs, currency),
-                wants = Amount(wants, currency)
+                needs = Amount(needs, targetCurrency),
+                wants = Amount(wants, targetCurrency)
             ),
             expensesByCategory = expensesByCategory,
             recentEntries = recentEntries,

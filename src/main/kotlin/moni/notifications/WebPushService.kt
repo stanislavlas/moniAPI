@@ -1,7 +1,14 @@
 package moni.notifications
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
+import com.google.auth.oauth2.GoogleCredentials
+import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseOptions
+import com.google.firebase.messaging.FirebaseMessaging
+import com.google.firebase.messaging.Message
+import com.google.firebase.messaging.Notification
+import com.google.firebase.messaging.WebpushConfig
+import com.google.firebase.messaging.WebpushNotification
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.SignatureAlgorithm
 import jakarta.annotation.PostConstruct
@@ -16,22 +23,20 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import moni.models.internal.PushSubscription
+import java.io.ByteArrayInputStream
 import java.net.URI
 import java.nio.ByteBuffer
 import java.security.KeyFactory
 import java.security.KeyPair
 import java.security.KeyPairGenerator
-import java.security.PrivateKey
 import java.security.SecureRandom
 import java.security.Security
 import java.security.interfaces.ECPrivateKey
 import java.security.interfaces.ECPublicKey
 import java.security.spec.ECPoint
 import java.security.spec.ECPublicKeySpec
-import java.security.spec.PKCS8EncodedKeySpec
 import java.util.Base64
 import java.util.Date
-import java.util.concurrent.TimeUnit
 import javax.crypto.Cipher
 import javax.crypto.KeyAgreement
 import javax.crypto.Mac
@@ -43,9 +48,9 @@ class WebPushService(
     @Value("\${vapid.publicKey}")  private val vapidPublicKeyB64:  String,
     @Value("\${vapid.privateKey}") private val vapidPrivateKeyB64: String,
     @Value("\${vapid.subject:mailto:moni@localhost}") private val subject: String,
-    @Value("\${fcm.projectId:}")    private val fcmProjectId:    String,
-    @Value("\${fcm.clientEmail:}")  private val fcmClientEmail:  String,
-    @Value("\${fcm.privateKey:}")   private val fcmPrivateKeyRaw: String,
+    @Value("\${fcm.projectId:}")   private val fcmProjectId:   String,
+    @Value("\${fcm.clientEmail:}") private val fcmClientEmail: String,
+    @Value("\${fcm.privateKey:}")  private val fcmPrivateKeyRaw: String,
     private val objectMapper: ObjectMapper,
 ) {
     private val httpClient = OkHttpClient()
@@ -53,11 +58,7 @@ class WebPushService(
 
     private val PLACEHOLDER = "change-me-default"
     private var vapidKeyPair: KeyPair? = null
-    private var fcmPrivateKey: PrivateKey? = null
-
-    // Cached OAuth2 token for FCM v1
-    private var fcmAccessToken: String? = null
-    private var fcmTokenExpiry: Long = 0L
+    private var firebaseMessaging: FirebaseMessaging? = null
 
     val isEnabled: Boolean get() = vapidKeyPair != null
 
@@ -65,6 +66,7 @@ class WebPushService(
     fun init() {
         if (Security.getProvider("BC") == null) Security.addProvider(BouncyCastleProvider())
 
+        // Initialise VAPID keys
         if (vapidPublicKeyB64 == PLACEHOLDER || vapidPrivateKeyB64 == PLACEHOLDER ||
             vapidPublicKeyB64.isBlank() || vapidPrivateKeyB64.isBlank()
         ) {
@@ -96,20 +98,40 @@ class WebPushService(
             logger.error("Failed to initialise VAPID keys: {}", e.message)
         }
 
-        // Initialise FCM service account private key if configured
+        // Initialise Firebase Admin SDK for FCM v1
         if (fcmProjectId.isNotBlank() && fcmClientEmail.isNotBlank() && fcmPrivateKeyRaw.isNotBlank()) {
             try {
-                val pemBody = fcmPrivateKeyRaw
-                    .replace("\\n", "\n")
-                    .replace("-----BEGIN PRIVATE KEY-----", "")
-                    .replace("-----END PRIVATE KEY-----", "")
-                    .replace("\\s".toRegex(), "")
-                val keyBytes = Base64.getDecoder().decode(pemBody)
-                fcmPrivateKey = KeyFactory.getInstance("RSA")
-                    .generatePrivate(PKCS8EncodedKeySpec(keyBytes))
-                logger.info("FCM v1 service account configured (project={}, email={})", fcmProjectId, fcmClientEmail)
+                // Reconstruct the service account JSON from individual env vars
+                val serviceAccountJson = """
+                    {
+                        "type": "service_account",
+                        "project_id": "$fcmProjectId",
+                        "client_email": "$fcmClientEmail",
+                        "private_key": "${fcmPrivateKeyRaw.replace("\\n", "\n")}",
+                        "token_uri": "https://oauth2.googleapis.com/token"
+                    }
+                """.trimIndent()
+
+                val credentials = GoogleCredentials
+                    .fromStream(ByteArrayInputStream(serviceAccountJson.toByteArray()))
+                    .createScoped("https://www.googleapis.com/auth/firebase.messaging")
+
+                val options = FirebaseOptions.builder()
+                    .setCredentials(credentials)
+                    .setProjectId(fcmProjectId)
+                    .build()
+
+                // Only initialise once (guard against hot reload)
+                val app = if (FirebaseApp.getApps().isEmpty()) {
+                    FirebaseApp.initializeApp(options)
+                } else {
+                    FirebaseApp.getInstance()
+                }
+
+                firebaseMessaging = FirebaseMessaging.getInstance(app)
+                logger.info("Firebase Admin SDK initialised (project={})", fcmProjectId)
             } catch (e: Exception) {
-                logger.error("Failed to load FCM service account private key: {}", e.message)
+                logger.error("Failed to initialise Firebase Admin SDK: {}", e.message)
             }
         }
     }
@@ -118,7 +140,7 @@ class WebPushService(
 
     /**
      * Send a Web Push notification.
-     * - FCM legacy endpoints (fcm.googleapis.com/fcm/send/) → FCM v1 API
+     * - FCM legacy endpoints → Firebase Admin SDK (FCM v1)
      * - All other endpoints (Apple, Mozilla) → RFC 8291/8292 VAPID
      * Returns true on success or transient error, false on 404/410 (subscription gone).
      */
@@ -128,117 +150,57 @@ class WebPushService(
             return true
         }
         return if (sub.endpoint.contains("fcm.googleapis.com/fcm/send/")) {
-            sendViaFcmV1(sub, title, body)
+            sendViaFcm(sub, title, body)
         } else {
             sendViaVapid(sub, title, body)
         }
     }
 
-    // ── FCM v1 API ────────────────────────────────────────────────────────────
+    // ── Firebase Admin SDK (FCM v1) ───────────────────────────────────────────
 
-    private fun sendViaFcmV1(sub: PushSubscription, title: String, body: String): Boolean {
-        val privKey = fcmPrivateKey
-        if (privKey == null) {
-            logger.warn("FCM service account not configured — falling back to VAPID for {}", sub.endpoint.take(60))
+    private fun sendViaFcm(sub: PushSubscription, title: String, body: String): Boolean {
+        val messaging = firebaseMessaging
+        if (messaging == null) {
+            logger.warn("Firebase not configured — falling back to VAPID for {}", sub.endpoint.take(60))
             return sendViaVapid(sub, title, body)
         }
         return try {
-            val accessToken = getFcmAccessToken(privKey)
-
-            // Extract FCM registration token from the endpoint URL
-            // endpoint format: https://fcm.googleapis.com/fcm/send/<registration_token>
             val registrationToken = sub.endpoint.substringAfterLast("/")
 
-            val fcmPayload = mapOf(
-                "message" to mapOf(
-                    "token" to registrationToken,
-                    "notification" to mapOf(
-                        "title" to title,
-                        "body"  to body,
-                    ),
-                    "webpush" to mapOf(
-                        "notification" to mapOf(
-                            "title" to title,
-                            "body"  to body,
-                            "icon"  to "/logo.png",
-                        ),
-                        "headers" to mapOf("TTL" to "86400"),
-                    ),
+            val message = Message.builder()
+                .setToken(registrationToken)
+                .setNotification(
+                    Notification.builder()
+                        .setTitle(title)
+                        .setBody(body)
+                        .build()
                 )
-            )
-
-            val requestBody = objectMapper.writeValueAsString(fcmPayload)
-            val url = "https://fcm.googleapis.com/v1/projects/$fcmProjectId/messages:send"
-
-            val request = Request.Builder()
-                .url(url)
-                .post(requestBody.toRequestBody("application/json".toMediaType()))
-                .header("Authorization", "Bearer $accessToken")
+                .setWebpushConfig(
+                    WebpushConfig.builder()
+                        .setNotification(
+                            WebpushNotification.builder()
+                                .setTitle(title)
+                                .setBody(body)
+                                .setIcon("/logo.png")
+                                .build()
+                        )
+                        .build()
+                )
                 .build()
 
-            logger.info("FCM v1 request — project: {} token: {}...", fcmProjectId, registrationToken.take(20))
-            val response     = httpClient.newCall(request).execute()
-            val statusCode   = response.code
-            val responseBody = try { response.body?.string() ?: "" } catch (_: Exception) { "" }
-            response.close()
-
-            logger.info("FCM v1 sent to {} — HTTP {} body: {}", registrationToken.take(20), statusCode, responseBody)
-            if (statusCode == 404) {
-                logger.info("FCM registration token gone (404): {}", sub.endpoint)
-                return false
-            }
-            if (statusCode !in 200..299) {
-                logger.warn("FCM v1 non-2xx {} for {}", statusCode, registrationToken.take(20))
-            }
+            val messageId = messaging.send(message)
+            logger.info("FCM v1 sent to {}... — messageId: {}", registrationToken.take(20), messageId)
             true
+        } catch (e: com.google.firebase.messaging.FirebaseMessagingException) {
+            val code = e.messagingErrorCode
+            logger.warn("FCM v1 error for {}...: {} — {}", sub.endpoint.take(40), code, e.message)
+            val isUnregistered = code == com.google.firebase.messaging.MessagingErrorCode.UNREGISTERED
+            if (isUnregistered) logger.info("FCM token unregistered, removing: {}", sub.endpoint)
+            !isUnregistered
         } catch (e: Exception) {
-            logger.error("Failed to send FCM v1 push: {}", e.message)
+            logger.error("Failed to send FCM push: {}", e.message)
             true
         }
-    }
-
-    /**
-     * Get a cached OAuth2 access token for the FCM v1 API using the service account.
-     * Tokens are valid for 1 hour — we cache and refresh when within 5 minutes of expiry.
-     */
-    private fun getFcmAccessToken(privateKey: PrivateKey): String {
-        val now = System.currentTimeMillis()
-        if (fcmAccessToken != null && now < fcmTokenExpiry - TimeUnit.MINUTES.toMillis(5)) {
-            return fcmAccessToken!!
-        }
-
-        val expiry = Date(now + TimeUnit.HOURS.toMillis(1))
-        val jwt = Jwts.builder()
-            .setIssuer(fcmClientEmail)
-            .setSubject(fcmClientEmail)
-            .setAudience("https://oauth2.googleapis.com/token")
-            .setIssuedAt(Date(now))
-            .setExpiration(expiry)
-            .claim("scope", "https://www.googleapis.com/auth/firebase.messaging")
-            .signWith(privateKey, SignatureAlgorithm.RS256)
-            .compact()
-
-        val tokenRequestBody = "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=$jwt"
-        val request = Request.Builder()
-            .url("https://oauth2.googleapis.com/token")
-            .post(tokenRequestBody.toRequestBody("application/x-www-form-urlencoded".toMediaType()))
-            .build()
-
-        val response     = httpClient.newCall(request).execute()
-        val responseBody = response.body?.string() ?: throw RuntimeException("Empty token response")
-        response.close()
-
-        if (!response.isSuccessful) throw RuntimeException("OAuth2 token request failed: $responseBody")
-
-        val tokenData    = objectMapper.readValue<Map<String, Any>>(responseBody)
-        val accessToken  = tokenData["access_token"] as? String
-            ?: throw RuntimeException("No access_token in response: $responseBody")
-
-        fcmAccessToken = accessToken
-        fcmTokenExpiry = now + TimeUnit.HOURS.toMillis(1)
-        logger.info("FCM OAuth2 access token refreshed")
-
-        return accessToken
     }
 
     // ── RFC 8291/8292 VAPID ───────────────────────────────────────────────────
@@ -258,10 +220,10 @@ class WebPushService(
                 .header("TTL",              "86400")
                 .build()
 
-            logger.info("VAPID push request — endpoint: {}", sub.endpoint.take(60))
+            logger.info("VAPID push — endpoint: {}", sub.endpoint.take(60))
             val response     = httpClient.newCall(request).execute()
             val statusCode   = response.code
-            val responseBody = try { response.body?.string() ?: "" } catch (_: Exception) { "" }
+            val responseBody = try { response.body.string() } catch (_: Exception) { "" }
             response.close()
 
             logger.info("VAPID push sent to {} — HTTP {} body: {}", sub.endpoint.take(60), statusCode, responseBody)
@@ -304,8 +266,8 @@ class WebPushService(
         ka.doPhase(receiverPub, true)
         val sharedSecret = ka.generateSecret()
 
-        val salt            = ByteArray(16).also { SecureRandom().nextBytes(it) }
-        val senderPubBytes  = encodePublicKey(senderPub)
+        val salt             = ByteArray(16).also { SecureRandom().nextBytes(it) }
+        val senderPubBytes   = encodePublicKey(senderPub)
         val receiverPubBytes = if (p256dhBytes.size == 64) byteArrayOf(0x04) + p256dhBytes else p256dhBytes
 
         val prk        = hkdfExtract(authBytes, sharedSecret)

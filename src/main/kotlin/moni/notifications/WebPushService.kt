@@ -115,11 +115,13 @@ class WebPushService(
                 .header("TTL",              "86400")
                 .build()
 
+            logger.info("Push request — endpoint: {} auth header: {}", sub.endpoint.take(60), vapidHeader.take(80))
             val response   = httpClient.newCall(request).execute()
             val statusCode = response.code
+            val responseBody = try { response.body?.string() ?: "" } catch (_: Exception) { "" }
             response.close()
 
-            logger.info("Push sent to {} — HTTP {}", sub.endpoint.take(60), statusCode)
+            logger.info("Push sent to {} — HTTP {} body: {}", sub.endpoint.take(60), statusCode, responseBody)
             if (statusCode == 410 || statusCode == 404) {
                 logger.info("Push subscription gone ({}): {}", statusCode, sub.endpoint)
                 return false

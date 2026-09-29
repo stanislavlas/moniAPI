@@ -2,6 +2,7 @@ package moni.notifications
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.jsonwebtoken.Jwts
+import io.jsonwebtoken.SignatureAlgorithm
 import jakarta.annotation.PostConstruct
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -238,10 +239,10 @@ class WebPushService(
         val expiry   = Date(System.currentTimeMillis() + 12 * 3600 * 1000)
 
         val jwt = Jwts.builder()
-            .claim("aud", audience)
-            .claim("sub", subject)
+            .setAudience(audience)
+            .setSubject(subject)
             .setExpiration(expiry)
-            .signWith(keyPair.private)
+            .signWith(keyPair.private, SignatureAlgorithm.ES256)
             .compact()
 
         val pubKeyB64 = Base64.getUrlEncoder().withoutPadding()

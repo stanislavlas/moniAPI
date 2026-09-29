@@ -23,13 +23,19 @@ class CategoryService(
 
     /**
      * Move all personal custom categories of [userId] into [householdId].
-     * Rewrites ownerKey in-place. Global categories are not touched.
+     * Rewrites ownerKey in-place and removes the old personal records.
+     * Global categories are not touched.
      * Called when a user creates or joins a household.
      */
     suspend fun assignToHousehold(userId: UUID, householdId: UUID) {
         categoryRepository.findByUserId(userId).forEach { cat ->
+            // Save under the household key first; only delete personal record on success.
             categoryRepository.save(cat.copy(householdId = householdId))
         }
+        // Remove all personal records now that they have been migrated.
+        // Done as a second pass so a partial failure on the saves above doesn't leave
+        // the user with neither personal nor household records.
+        categoryRepository.deleteByUserId(userId)
     }
 
     /**
@@ -95,6 +101,14 @@ class CategoryService(
         assertCategoryOwnership(category, userId)
 
         categoryRepository.delete(categoryId)
+    }
+
+    /**
+     * Delete all personal (non-global, non-household) categories for [userId].
+     * Called during account deletion.
+     */
+    suspend fun deletePersonalCategories(userId: UUID) {
+        categoryRepository.deleteByUserId(userId)
     }
 
     /**

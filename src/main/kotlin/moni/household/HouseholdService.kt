@@ -62,11 +62,18 @@ class HouseholdService(
     /**
      * Adds [joiningUserId] as a MEMBER of [household].
      * Precondition: caller has already validated ownership / invitation.
+     *
+     * Membership is checked against the household's own [members] list — the single source
+     * of truth fetched from DynamoDB at call time. The user record's [householdId] field is
+     * a denormalised cache that can be stale if a previous join/leave failed partway through,
+     * so it is NOT used as the authoritative check here.
      */
     suspend fun joinHousehold(household: Household, joiningUserId: UUID): Household {
         val newMember = dataStoreClient.getUserById(joiningUserId)
-        if (newMember.householdId != null) throw IllegalArgumentException("That user is already in a household")
-        if (household.members.any { it.userId == joiningUserId }) throw IllegalArgumentException("User is already a member of this household")
+        // Use household.members as the authoritative source — avoids acting on a stale
+        // User.householdId that could be out of sync after a partial earlier write.
+        if (household.members.any { it.userId == joiningUserId })
+            throw IllegalArgumentException("User is already a member of this household")
 
         val updated = household.copy(
             members = household.members + HouseholdMember(newMember.userId, newMember.name, newMember.email, MemberRole.MEMBER)
@@ -110,8 +117,7 @@ class HouseholdService(
     suspend fun assertMembership(userId: UUID, householdId: UUID) {
         val household = householdRepository.findById(householdId)
             ?: throw NoSuchElementException("Household not found")
-        if (household.members.none { it.userId == userId })
-            throw ForbiddenException("User is not a member of this household")
+        assertMembership(userId, household)
     }
 
     /**

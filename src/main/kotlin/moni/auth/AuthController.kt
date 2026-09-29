@@ -22,10 +22,12 @@ class AuthController(
 ) {
     @PostMapping("/login")
     fun loginAndGetJwt(@Valid @RequestBody authRequest: AuthRequest): AuthUserResponse {
-        return authService.getUserWithJwt(
-            email = authRequest.email,
-            password = authRequest.password,
-        )
+        return runBlocking {
+            authService.getUserWithJwt(
+                email = authRequest.email,
+                password = authRequest.password,
+            )
+        }
     }
 
     @PostMapping("/create")

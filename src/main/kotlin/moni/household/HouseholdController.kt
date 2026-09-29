@@ -94,7 +94,7 @@ class HouseholdController(
 
     private suspend fun requireHouseholdId(userId: UUID): UUID =
         dataStoreClient.getUserById(userId).householdId
-            ?: throw IllegalStateException("User is not in a household")
+            ?: throw IllegalArgumentException("User is not in a household")
 }
 
 data class CreateHouseholdRequest(

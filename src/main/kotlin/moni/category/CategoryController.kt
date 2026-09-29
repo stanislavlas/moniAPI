@@ -3,6 +3,7 @@ package moni.category
 import kotlinx.coroutines.runBlocking
 import org.springframework.web.bind.annotation.*
 import moni.auth.JwtAuth
+import moni.common.getUser
 import moni.common.getUserId
 import moni.common.successResponse
 import moni.dataStore.IDataStoreClient
@@ -21,10 +22,9 @@ class CategoryController(
     fun getCategories(
         @RequestHeader("Authorization") authorization: String,
     ): List<Category> {
-        val userId = authorization.getUserId(jwtAuth)
         return runBlocking {
-            val user = dataStoreClient.getUserById(userId)
-            categoryService.getCategories(userId, user.householdId)
+            val user = authorization.getUser(jwtAuth, dataStoreClient)
+            categoryService.getCategories(user.userId, user.householdId)
         }
     }
 
@@ -33,12 +33,11 @@ class CategoryController(
         @RequestHeader("Authorization") authorization: String,
         @RequestBody request: CreateCategoryRequest
     ): Category {
-        val userId = authorization.getUserId(jwtAuth)
         return runBlocking {
             // Auto-scope to household if the user is currently in one
-            val user = dataStoreClient.getUserById(userId)
+            val user = authorization.getUser(jwtAuth, dataStoreClient)
             categoryService.createCategory(
-                userId      = userId,
+                userId      = user.userId,
                 householdId = user.householdId,   // null → personal, non-null → household
                 name        = request.name,
                 emoji       = request.resolvedEmoji,

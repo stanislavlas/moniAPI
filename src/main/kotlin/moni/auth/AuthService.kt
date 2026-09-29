@@ -3,10 +3,13 @@ package moni.auth
 import kotlinx.coroutines.runBlocking
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
+import moni.category.CategoryService
 import moni.config.AuthException
 import moni.config.ForbiddenException
 import moni.currency.CurrencyConversionService
+import moni.dataStore.EntryRepository
 import moni.dataStore.IDataStoreClient
+import moni.household.HouseholdService
 import moni.models.Currency
 import moni.models.api.AuthUserResponse
 import moni.models.api.RegistrationPendingResponse
@@ -23,9 +26,12 @@ class AuthService(
     private val refreshTokenService: RefreshTokenService,
     private val currencyConversionService: CurrencyConversionService,
     private val verificationCodeService: VerificationCodeService,
+    private val entryRepository: EntryRepository,
+    private val categoryService: CategoryService,
+    private val householdService: HouseholdService,
 ) {
-    fun getUserWithJwt(email: String, password: String): AuthUserResponse {
-        val user = runBlocking { dataStore.getUserByEmail(email = email) }
+    suspend fun getUserWithJwt(email: String, password: String): AuthUserResponse {
+        val user = dataStore.getUserByEmail(email = email)
             ?: throw AuthException("Incorrect credentials")
 
         val isPasswordMatch = verifyPassword(
@@ -43,7 +49,7 @@ class AuthService(
 
         // Generate both access and refresh tokens
         val accessToken = jwtAuth.generateJWT(user.userId)
-        val refreshToken = runBlocking { refreshTokenService.generateRefreshToken(user.userId) }
+        val refreshToken = refreshTokenService.generateRefreshToken(user.userId)
 
         return AuthUserResponse(
             accessToken = accessToken,
@@ -113,11 +119,17 @@ class AuthService(
 
         val user = dataStore.getUserById(verificationCode.userId)
         val verifiedUser = user.copy(emailVerified = true)
+
+        // 1. Persist the verified user first. If this throws, nothing else runs and the
+        //    code remains valid so the user can retry.
         dataStore.putUser(verifiedUser)
 
+        // 2. Consume the code. If this fails after a successful putUser the code stays in
+        //    DynamoDB but is now harmless — the user record is already verified and a
+        //    second attempt via the same code would succeed idempotently.
         verificationCodeService.consume(code)
 
-        // Now issue tokens
+        // 3. Issue tokens only after both writes are complete.
         val accessToken = jwtAuth.generateJWT(verifiedUser.userId)
         val refreshToken = refreshTokenService.generateRefreshToken(verifiedUser.userId)
 
@@ -174,10 +186,33 @@ class AuthService(
             throw AuthException("Incorrect password")
         }
 
-        // Revoke all refresh tokens
+        // 1. Leave / clean up household membership before deleting the user record so that
+        //    the household's members list and the owner pointer remain consistent.
+        val householdId = user.householdId
+        if (householdId != null) {
+            val household = householdService.getHouseholdByUserId(userId)
+            if (household != null) {
+                if (household.ownerId == userId) {
+                    // Owner is deleting their account — delete the whole household so
+                    // remaining members aren't left orphaned.
+                    householdService.deleteHousehold(householdId, userId)
+                } else {
+                    householdService.leaveHousehold(householdId, userId)
+                }
+            }
+        }
+
+        // 2. Delete personal entries (household entries authored by this user are left intact
+        //    since other household members still need them).
+        entryRepository.deleteByUserId(userId)
+
+        // 3. Delete personal categories (household categories survive for other members).
+        categoryService.deletePersonalCategories(userId)
+
+        // 4. Revoke all refresh tokens.
         refreshTokenService.revokeAllUserTokens(userId)
 
-        // Delete user from DynamoDB
+        // 5. Delete user record last — everything referencing it has been cleaned up.
         dataStore.deleteUser(userId)
     }
 

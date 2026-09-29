@@ -11,8 +11,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import moni.models.Amount
 import java.math.BigDecimal
-import java.time.Instant
-import java.time.temporal.ChronoUnit
 import java.util.concurrent.TimeUnit
 
 @Service
@@ -28,15 +26,17 @@ class CurrencyConversionService(
         .expireAfterWrite(24, TimeUnit.HOURS)
         .build()
 
-    // Currency names map — single value, manual TTL
-    @Volatile private var namesMap: Map<String, String> = emptyMap()
-    @Volatile private var namesFetchedAt: Instant = Instant.EPOCH
+    // Currency names cache — single sentinel key "all", value: the names map.
+    // Uses the same Caffeine TTL approach as rateCache for consistency and thread safety
+    // (eliminates the @Volatile pair that had a race window between the two fields).
+    private val namesCache: Cache<String, Map<String, String>> = Caffeine.newBuilder()
+        .expireAfterWrite(24, TimeUnit.HOURS)
+        .build()
 
     /** For unit tests only — injects rates and names directly into the caches. */
     fun injectForTest(rates: Map<String, BigDecimal>, names: Map<String, String>) {
         rates.forEach { (key, rate) -> rateCache.put(key, rate) }
-        namesMap = names
-        namesFetchedAt = Instant.now()
+        namesCache.put("all", names)
     }
 
     fun convertAmount(amount: Amount, targetCurrency: String): Amount {
@@ -55,19 +55,13 @@ class CurrencyConversionService(
 
     fun isValidCurrency(code: String): Boolean {
         if (code.isBlank()) return false
-        ensureFreshNames()
-        return namesMap.containsKey(code)
+        return getNames().containsKey(code)
     }
 
-    fun getCurrencyNames(): Map<String, String> {
-        ensureFreshNames()
-        return namesMap
-    }
+    fun getCurrencyNames(): Map<String, String> = getNames()
 
-    private fun ensureFreshNames() {
-        if (namesMap.isNotEmpty() && ChronoUnit.HOURS.between(namesFetchedAt, Instant.now()) < 24) return
-        fetchNames()
-    }
+    private fun getNames(): Map<String, String> =
+        namesCache.get("all") { fetchNames() } ?: emptyMap()
 
     private fun fetchRate(from: String, to: String): BigDecimal? {
         return try {
@@ -92,23 +86,24 @@ class CurrencyConversionService(
         }
     }
 
-    private fun fetchNames() {
-        try {
+    private fun fetchNames(): Map<String, String>? {
+        return try {
             val request = Request.Builder()
                 .url("https://api.frankfurter.app/currencies")
                 .build()
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     log.warn("frankfurter.app /currencies returned HTTP ${response.code}")
-                    return
+                    return null
                 }
-                val body = response.body?.string() ?: return
-                namesMap = objectMapper.readValue<Map<String, String>>(body)
-                namesFetchedAt = Instant.now()
-                log.info("Currency names refreshed: ${namesMap.size} currencies")
+                val body = response.body?.string() ?: return null
+                val names = objectMapper.readValue<Map<String, String>>(body)
+                log.info("Currency names refreshed: ${names.size} currencies")
+                names
             }
         } catch (e: Exception) {
             log.warn("Failed to fetch currency names: ${e.message}")
+            null
         }
     }
 }

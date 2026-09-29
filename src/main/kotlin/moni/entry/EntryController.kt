@@ -5,6 +5,7 @@ import org.springframework.web.bind.annotation.*
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import moni.auth.JwtAuth
+import moni.common.getUser
 import moni.common.getUserId
 import moni.common.successResponse
 import moni.dataStore.IDataStoreClient
@@ -33,11 +34,10 @@ class EntryController(
         @RequestHeader("Authorization") authorization: String,
         @RequestParam(required = false, defaultValue = "false") household: Boolean
     ): List<Int> {
-        val userId = authorization.getUserId(jwtAuth)
         return runBlocking {
-            val user = dataStoreClient.getUserById(userId)
+            val user = authorization.getUser(jwtAuth, dataStoreClient)
             val householdId = if (household) user.householdId else null
-            entryService.getActiveYears(userId = userId, householdId = householdId)
+            entryService.getActiveYears(userId = user.userId, householdId = householdId)
         }
     }
 
@@ -50,11 +50,10 @@ class EntryController(
         @RequestHeader("Authorization") authorization: String,
         @RequestParam(required = false, defaultValue = "false") household: Boolean
     ): List<String> {
-        val userId = authorization.getUserId(jwtAuth)
         return runBlocking {
-            val user = dataStoreClient.getUserById(userId)
+            val user = authorization.getUser(jwtAuth, dataStoreClient)
             val householdId = if (household) user.householdId else null
-            entryService.getActiveMonths(userId = userId, householdId = householdId)
+            entryService.getActiveMonths(userId = user.userId, householdId = householdId)
         }
     }
 
@@ -65,8 +64,6 @@ class EntryController(
         @RequestParam(required = false) year: Int?,
         @RequestParam(required = false, defaultValue = "false") household: Boolean
     ): List<Entry> {
-        val userId = authorization.getUserId(jwtAuth)
-
         val (fromDate, toDate) = when {
             yearMonth != null -> {
                 try {
@@ -84,10 +81,10 @@ class EntryController(
         }
 
         return runBlocking {
-            val user = dataStoreClient.getUserById(userId)
+            val user = authorization.getUser(jwtAuth, dataStoreClient)
             val householdId = if (household) user.householdId else null
             entryService.getEntries(
-                userId         = userId,
+                userId         = user.userId,
                 householdId    = householdId,
                 fromDate       = fromDate,
                 toDate         = toDate,
@@ -101,12 +98,10 @@ class EntryController(
         @RequestHeader("Authorization") authorization: String,
         @Valid @RequestBody request: CreateEntryRequest
     ): Entry {
-        val userId = authorization.getUserId(jwtAuth)
-
         return runBlocking {
-            val user = dataStoreClient.getUserById(userId)
+            val user = authorization.getUser(jwtAuth, dataStoreClient)
             entryService.createEntry(
-                userId      = userId,
+                userId      = user.userId,
                 householdId = user.householdId,
                 amount      = request.amount,
                 categoryId  = UUID.fromString(request.categoryId),

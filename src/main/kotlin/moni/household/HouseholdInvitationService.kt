@@ -89,10 +89,11 @@ class HouseholdInvitationService(
     suspend fun cancelInvitation(ownerUserId: UUID, invitationId: UUID) {
         val invitation = invitationRepository.findById(invitationId)
             ?: throw NoSuchElementException("Invitation not found")
-        val owner = dataStoreClient.getUserById(ownerUserId)
-        val householdId = owner.householdId ?: throw IllegalArgumentException("You are not in a household")
-        if (invitation.householdId != householdId) throw IllegalArgumentException("Invitation does not belong to your household")
-        val household = householdRepository.findById(householdId) ?: throw IllegalArgumentException("Household not found")
+
+        // Load the household from the invitation directly — avoids trusting the potentially
+        // stale User.householdId field that can be out of sync after a partial write.
+        val household = householdRepository.findById(invitation.householdId)
+            ?: throw IllegalArgumentException("Household not found")
         if (household.ownerId != ownerUserId) throw IllegalArgumentException("Only the owner can cancel invitations")
         if (invitation.status != InvitationStatus.PENDING) throw IllegalArgumentException("Only PENDING invitations can be cancelled")
 

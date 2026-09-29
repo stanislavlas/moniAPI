@@ -93,12 +93,12 @@ class RefreshTokenRepository(
 
     private fun mapToRefreshToken(item: Map<String, AttributeValue>): RefreshToken {
         return RefreshToken(
-            tokenId     = UUID.fromString(item[TOKEN_ID_ATTRIBUTE]?.asS()     ?: throw Exception("Missing tokenId")),
-            userId      = UUID.fromString(item[USER_ID_ATTRIBUTE]?.asS()      ?: throw Exception("Missing userId")),
-            tokenHash   = item[TOKEN_HASH_ATTRIBUTE]?.asS()                   ?: throw Exception("Missing tokenHash"),
+            tokenId     = UUID.fromString(item[TOKEN_ID_ATTRIBUTE]?.asS()     ?: throw IllegalStateException("Missing tokenId")),
+            userId      = UUID.fromString(item[USER_ID_ATTRIBUTE]?.asS()      ?: throw IllegalStateException("Missing userId")),
+            tokenHash   = item[TOKEN_HASH_ATTRIBUTE]?.asS()                   ?: throw IllegalStateException("Missing tokenHash"),
             tokenPrefix = item[TOKEN_PREFIX_ATTRIBUTE]?.asS()                 ?: "",   // "" for rows written before this change
-            expiresAt   = Instant.ofEpochSecond(item[EXPIRES_AT_ATTRIBUTE]?.asN()?.toLong() ?: throw Exception("Missing expiresAt")),
-            createdAt   = Instant.ofEpochSecond(item[CREATED_AT_ATTRIBUTE]?.asN()?.toLong() ?: throw Exception("Missing createdAt")),
+            expiresAt   = Instant.ofEpochSecond(item[EXPIRES_AT_ATTRIBUTE]?.asN()?.toLong() ?: throw IllegalStateException("Missing expiresAt")),
+            createdAt   = Instant.ofEpochSecond(item[CREATED_AT_ATTRIBUTE]?.asN()?.toLong() ?: throw IllegalStateException("Missing createdAt")),
             deviceInfo  = item[DEVICE_INFO_ATTRIBUTE]?.asS()
         )
     }

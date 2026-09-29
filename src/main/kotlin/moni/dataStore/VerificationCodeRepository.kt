@@ -79,15 +79,12 @@ class VerificationCodeRepository(
     }
 
     suspend fun deleteAllForUser(userId: java.util.UUID) {
-        // Find the code via the reverse-lookup record (O(1))
+        // Find the code via the reverse-lookup record (O(1)) and delete both DynamoDB
+        // records in one call. deleteByCode removes the primary code record AND the
+        // "user:<userId>" reverse-lookup record, so no second DeleteItem is needed.
         val record = findByUserId(userId)
         if (record != null) {
-            deleteByCode(record.code) // also removes the reverse-lookup record
+            deleteByCode(record.code)
         }
-        // Remove the reverse-lookup record itself in case deleteByCode missed it
-        dynamoClient.deleteItem(DeleteItemRequest {
-            tableName = VERIFICATION_TABLE
-            key = mapOf(CODE_ATTRIBUTE to AttributeValue.S("user:$userId"))
-        })
     }
 }

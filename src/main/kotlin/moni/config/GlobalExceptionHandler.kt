@@ -8,6 +8,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.context.request.WebRequest
+import java.time.format.DateTimeParseException
 
 data class ErrorResponse(
     val message: String,
@@ -40,8 +41,9 @@ class GlobalExceptionHandler {
     fun handleAllExceptions(ex: Exception, request: WebRequest): ResponseEntity<ErrorResponse> {
         logger.error("Unhandled exception at ${request.getDescription(false)}", ex)
 
+        // Never expose internal exception messages to clients — use a safe generic message.
         val errorResponse = ErrorResponse(
-            message = ex.message ?: "An unexpected error occurred",
+            message = "An unexpected error occurred",
             details = request.getDescription(false).replace("uri=", "")
         )
 
@@ -109,5 +111,18 @@ class GlobalExceptionHandler {
         )
 
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse)
+    }
+
+    /** Malformed date/time strings (e.g. bad ISO date in request body) → 400. */
+    @ExceptionHandler(DateTimeParseException::class)
+    fun handleDateTimeParseException(ex: DateTimeParseException, request: WebRequest): ResponseEntity<ErrorResponse> {
+        logger.warn("Date parse error at ${request.getDescription(false)}: ${ex.message}")
+
+        val errorResponse = ErrorResponse(
+            message = "Invalid date format",
+            details = request.getDescription(false).replace("uri=", "")
+        )
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse)
     }
 }

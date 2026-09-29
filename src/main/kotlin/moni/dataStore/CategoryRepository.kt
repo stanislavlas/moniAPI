@@ -66,6 +66,11 @@ class CategoryRepository(
         })
     }
 
+    /** Delete all personal categories owned by [userId] (ownerKey = "user:$userId"). */
+    suspend fun deleteByUserId(userId: UUID) {
+        findByUserId(userId).forEach { cat -> delete(cat.categoryId) }
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private suspend fun queryByOwnerKey(ownerKey: String): List<Category> {

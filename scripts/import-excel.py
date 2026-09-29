@@ -17,7 +17,6 @@ import requests
 
 BASE = "http://localhost:8080/api"
 CURRENCY = "CZK"
-CHUNK = 25
 
 MONTH_MAP = {
     "Január": 1, "Február": 2, "Marec": 3, "Apríl": 4,
@@ -29,45 +28,45 @@ MONTH_MAP = {
 
 # column name -> (category name, type, necessity)
 STANISLAV_COLS = {
-    "Salary":       ("Salary",       "INCOME",     "NEED"),
-    "Gastro":       ("Salary",       "INCOME",     "NEED"),
-    "Flexi":        ("Salary",       "INCOME",     "NEED"),
-    "Rent":         ("Rent",         "EXPENSE",    "NEED"),
-    "Energie":      ("Energy",       "EXPENSE",    "NEED"),
-    "Elektricity":  ("Electricity",  "EXPENSE",    "NEED"),
-    "Internet":     ("Internet",     "EXPENSE",    "NEED"),
-    "Phone":        ("Phone",        "EXPENSE",    "NEED"),
-    "Insurance":    ("Insurance",    "EXPENSE",    "NEED"),
-    "Groceries":    ("Groceries",    "EXPENSE",    "NEED"),
-    "Household":    ("Household",    "EXPENSE",    "NEED"),
-    "Transport":    ("Transport",    "EXPENSE",    "NEED"),
-    "Clothing":     ("Clothing",     "EXPENSE",    "WANT"),
-    "Multisport":   ("Subscription", "EXPENSE",    "WANT"),
-    "Subscription": ("Subscription", "EXPENSE",    "WANT"),
-    "Restaurants":  ("Restaurants",  "EXPENSE",    "WANT"),
-    "Alza":         ("Alza",         "EXPENSE",    "WANT"),
-    "Entertainment":("Entertainment","EXPENSE",    "WANT"),
-    "Other":        ("Other",        "EXPENSE",    "WANT"),
-    "ETF":          ("Stocks",       "INVESTMENT", "NEED"),
-    "Indepedence":  ("Savings",      "INVESTMENT", "NEED"),
+    "Salary":       ("Salary",       "INCOME",     "NECESSARY"),
+    "Gastro":       ("Salary",       "INCOME",     "NECESSARY"),
+    "Flexi":        ("Salary",       "INCOME",     "NECESSARY"),
+    "Rent":         ("Rent",         "EXPENSE",    "NECESSARY"),
+    "Energie":      ("Energy",       "EXPENSE",    "NECESSARY"),
+    "Elektricity":  ("Electricity",  "EXPENSE",    "NECESSARY"),
+    "Internet":     ("Internet",     "EXPENSE",    "NECESSARY"),
+    "Phone":        ("Phone",        "EXPENSE",    "NECESSARY"),
+    "Insurance":    ("Insurance",    "EXPENSE",    "NECESSARY"),
+    "Groceries":    ("Groceries",    "EXPENSE",    "NECESSARY"),
+    "Household":    ("Household",    "EXPENSE",    "NECESSARY"),
+    "Transport":    ("Transport",    "EXPENSE",    "NECESSARY"),
+    "Clothing":     ("Clothing",     "EXPENSE",    "OPTIONAL"),
+    "Multisport":   ("Subscription", "EXPENSE",    "OPTIONAL"),
+    "Subscription": ("Subscription", "EXPENSE",    "OPTIONAL"),
+    "Restaurants":  ("Restaurants",  "EXPENSE",    "OPTIONAL"),
+    "Alza":         ("Alza",         "EXPENSE",    "OPTIONAL"),
+    "Entertainment":("Entertainment","EXPENSE",    "OPTIONAL"),
+    "Other":        ("Other",        "EXPENSE",    "OPTIONAL"),
+    "ETF":          ("Stocks",       "INVESTMENT", "NECESSARY"),
+    "Indepedence":  ("Savings",      "INVESTMENT", "NECESSARY"),
 }
 
 LEA_COLS = {
-    "Salary":       ("Salary",       "INCOME",     "NEED"),
-    "Gastro":       ("Salary",       "INCOME",     "NEED"),
-    "Rent":         ("Rent",         "EXPENSE",    "NEED"),
-    "Phone":        ("Phone",        "EXPENSE",    "NEED"),
-    "Groceries":    ("Groceries",    "EXPENSE",    "NEED"),
-    "Household":    ("Household",    "EXPENSE",    "NEED"),
-    "Transport":    ("Transport",    "EXPENSE",    "NEED"),
-    "Clothing":     ("Clothing",     "EXPENSE",    "WANT"),
-    "Restaurants":  ("Restaurants",  "EXPENSE",    "WANT"),
-    "Alza":         ("Alza",         "EXPENSE",    "WANT"),
-    "Entertainment":("Entertainment","EXPENSE",    "WANT"),
-    "Other":        ("Other",        "EXPENSE",    "WANT"),
-    "ETF":          ("Stocks",       "INVESTMENT", "NEED"),
-    "Car":          ("Car",          "EXPENSE",    "NEED"),
-    "Hypotéka":     ("Mortgage",     "EXPENSE",    "NEED"),
+    "Salary":       ("Salary",       "INCOME",     "NECESSARY"),
+    "Gastro":       ("Salary",       "INCOME",     "NECESSARY"),
+    "Rent":         ("Rent",         "EXPENSE",    "NECESSARY"),
+    "Phone":        ("Phone",        "EXPENSE",    "NECESSARY"),
+    "Groceries":    ("Groceries",    "EXPENSE",    "NECESSARY"),
+    "Household":    ("Household",    "EXPENSE",    "NECESSARY"),
+    "Transport":    ("Transport",    "EXPENSE",    "NECESSARY"),
+    "Clothing":     ("Clothing",     "EXPENSE",    "OPTIONAL"),
+    "Restaurants":  ("Restaurants",  "EXPENSE",    "OPTIONAL"),
+    "Alza":         ("Alza",         "EXPENSE",    "OPTIONAL"),
+    "Entertainment":("Entertainment","EXPENSE",    "OPTIONAL"),
+    "Other":        ("Other",        "EXPENSE",    "OPTIONAL"),
+    "ETF":          ("Stocks",       "INVESTMENT", "NECESSARY"),
+    "Car":          ("Car",          "EXPENSE",    "NECESSARY"),
+    "Hypotéka":     ("Mortgage",     "EXPENSE",    "NECESSARY"),
 }
 
 
@@ -145,22 +144,24 @@ def build_entries(ws, col_map: dict, cat_id_map: dict) -> list:
 
 def send_entries(entries: list, token: str) -> None:
     total = len(entries)
-    print(f"  Sending {total} entries in chunks of {CHUNK}...")
-    for i in range(0, total, CHUNK):
-        chunk = entries[i : i + CHUNK]
+    print(f"  Sending {total} entries individually...")
+    ok = 0
+    errors = 0
+    for i, entry in enumerate(entries, start=1):
         resp = requests.post(
-            f"{BASE}/entries/batch",
+            f"{BASE}/entries",
             headers={
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json",
             },
-            data=json.dumps(chunk),
+            data=json.dumps(entry),
         )
-        batch_num = i // CHUNK + 1
         if resp.status_code == 200:
-            print(f"  Batch {batch_num}: OK ({len(chunk)} entries)")
+            ok += 1
         else:
-            print(f"  Batch {batch_num}: ERROR {resp.status_code} — {resp.text}", file=sys.stderr)
+            errors += 1
+            print(f"  Entry {i}/{total}: ERROR {resp.status_code} — {resp.text}", file=sys.stderr)
+    print(f"  Done: {ok} created, {errors} errors.")
 
 
 def main():

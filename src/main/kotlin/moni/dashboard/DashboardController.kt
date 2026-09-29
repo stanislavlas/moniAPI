@@ -3,6 +3,7 @@ package moni.dashboard
 import kotlinx.coroutines.runBlocking
 import org.springframework.web.bind.annotation.*
 import moni.auth.JwtAuth
+import moni.common.getUser
 import moni.common.getUserId
 import moni.dataStore.IDataStoreClient
 import moni.models.api.DashboardResponse
@@ -23,10 +24,8 @@ class DashboardController(
         @RequestParam fromDate: String,
         @RequestParam toDate: String
     ): DashboardResponse {
-        val userId = authorization.getUserId(jwtAuth)
-
         return runBlocking {
-            val user = dataStoreClient.getUserById(userId)
+            val user = authorization.getUser(jwtAuth, dataStoreClient)
             val householdId = if (household) user.householdId else null
             val parsedFrom = try { LocalDate.parse(fromDate) }
                 catch (_: DateTimeParseException) { throw IllegalArgumentException("Invalid fromDate format. Expected YYYY-MM-DD, got: $fromDate") }
@@ -34,7 +33,7 @@ class DashboardController(
                 catch (_: DateTimeParseException) { throw IllegalArgumentException("Invalid toDate format. Expected YYYY-MM-DD, got: $toDate") }
             if (parsedFrom.isAfter(parsedTo)) throw IllegalArgumentException("fromDate ($fromDate) must not be after toDate ($toDate)")
             dashboardService.getDashboard(
-                userId         = userId,
+                userId         = user.userId,
                 householdId    = householdId,
                 fromDate       = parsedFrom,
                 toDate         = parsedTo,

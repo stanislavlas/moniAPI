@@ -181,6 +181,13 @@ class EntryRepository(
         dynamoClient.deleteItem(deleteRequest)
     }
 
+    /** Delete all entries authored by [userId] (personal entries only — household entries are left). */
+    suspend fun deleteByUserId(userId: UUID) {
+        findByUserId(userId, fromDate = null, toDate = null).forEach { entry ->
+            delete(entry.entryId)
+        }
+    }
+
     private fun buildItem(entry: Entry): MutableMap<String, AttributeValue> {
         val item = mutableMapOf(
             ENTRY_ID_ATTRIBUTE        to AttributeValue.S(entry.entryId.toString()),
@@ -204,21 +211,21 @@ class EntryRepository(
         val householdIdStr = item[HOUSEHOLD_ID_ATTRIBUTE]?.asS()
 
         return Entry(
-            entryId = UUID.fromString(item[ENTRY_ID_ATTRIBUTE]?.asS() ?: throw Exception("Missing entryId")),
-            userId = UUID.fromString(item[USER_ID_ATTRIBUTE]?.asS() ?: throw Exception("Missing userId")),
+            entryId = UUID.fromString(item[ENTRY_ID_ATTRIBUTE]?.asS() ?: throw IllegalStateException("Missing entryId")),
+            userId = UUID.fromString(item[USER_ID_ATTRIBUTE]?.asS() ?: throw IllegalStateException("Missing userId")),
             householdId = householdIdStr?.let { UUID.fromString(it) },
             amount = Amount(
-                value = BigDecimal(item[AMOUNT_VALUE_ATTRIBUTE]?.asN() ?: throw Exception("Missing amount value")),
-                currency = item[AMOUNT_CURRENCY_ATTRIBUTE]?.asS() ?: throw Exception("Missing currency")
+                value = BigDecimal(item[AMOUNT_VALUE_ATTRIBUTE]?.asN() ?: throw IllegalStateException("Missing amount value")),
+                currency = item[AMOUNT_CURRENCY_ATTRIBUTE]?.asS() ?: throw IllegalStateException("Missing currency")
             ),
-            categoryId = UUID.fromString(item[CATEGORY_ID_ATTRIBUTE]?.asS() ?: throw Exception("Missing categoryId")),
-            date = LocalDate.parse(item[DATE_ATTRIBUTE]?.asS() ?: throw Exception("Missing date")),
-            name = item[NAME_ATTRIBUTE]?.asS() ?: throw Exception("Missing name"),
+            categoryId = UUID.fromString(item[CATEGORY_ID_ATTRIBUTE]?.asS() ?: throw IllegalStateException("Missing categoryId")),
+            date = LocalDate.parse(item[DATE_ATTRIBUTE]?.asS() ?: throw IllegalStateException("Missing date")),
+            name = item[NAME_ATTRIBUTE]?.asS() ?: throw IllegalStateException("Missing name"),
             note = item[NOTE_ATTRIBUTE]?.asS() ?: "",
-            type = TransactionType.valueOf(item[TYPE_ATTRIBUTE]?.asS() ?: throw Exception("Missing type")),
-            necessity = Necessity.fromString(item[NECESSITY_ATTRIBUTE]?.asS() ?: throw Exception("Missing necessity")),
-            authorName = item[AUTHOR_NAME_ATTRIBUTE]?.asS() ?: throw Exception("Missing authorName"),
-            createdAt = Instant.ofEpochSecond(item[CREATED_AT_ATTRIBUTE]?.asN()?.toLong() ?: throw Exception("Missing createdAt"))
+            type = TransactionType.valueOf(item[TYPE_ATTRIBUTE]?.asS() ?: throw IllegalStateException("Missing type")),
+            necessity = Necessity.fromString(item[NECESSITY_ATTRIBUTE]?.asS() ?: throw IllegalStateException("Missing necessity")),
+            authorName = item[AUTHOR_NAME_ATTRIBUTE]?.asS() ?: throw IllegalStateException("Missing authorName"),
+            createdAt = Instant.ofEpochSecond(item[CREATED_AT_ATTRIBUTE]?.asN()?.toLong() ?: throw IllegalStateException("Missing createdAt"))
         )
     }
 }

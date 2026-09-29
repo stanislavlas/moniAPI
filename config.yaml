@@ -2,7 +2,7 @@ name: "Moni API"
 description: "Kotlin/Spring Boot REST API for Moni app"
 # Bump version on every push so HA shows "Update available" in the add-on store.
 # Use MAJOR.MINOR.PATCH: patch for bug fixes, minor for new features.
-version: "1.2.8"
+version: "1.2.9"
 slug: "moni-api"
 init: false
 host_network: true
@@ -16,22 +16,6 @@ ports_description:
 options:
   jwt_secret: "change-me-use-a-random-32-plus-char-string"
   cors_allowed_origins: "http://homeassistant:3000,http://localhost:3000"
-  vapid_public_key: "change-me-default"
-  vapid_private_key: "change-me-default"
-  vapid_subject: "mailto:moni@localhost"
-  fcm_project_id: ""
-  fcm_client_email: ""
-  fcm_private_key: ""
-  fcm_client_id: ""
-  fcm_private_key_id: ""
 schema:
   jwt_secret: str
   cors_allowed_origins: str
-  vapid_public_key: str
-  vapid_private_key: str
-  vapid_subject: str
-  fcm_project_id: str
-  fcm_client_email: str
-  fcm_private_key: str
-  fcm_client_id: str
-  fcm_private_key_id: str

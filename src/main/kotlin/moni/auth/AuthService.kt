@@ -31,7 +31,7 @@ class AuthService(
     private val householdService: HouseholdService,
 ) {
     suspend fun getUserWithJwt(email: String, password: String): AuthUserResponse {
-        val user = dataStore.getUserByEmail(email = email)
+        val user = dataStore.getUserByEmail(email.trim().lowercase())
             ?: throw AuthException("Incorrect credentials")
 
         val isPasswordMatch = verifyPassword(
@@ -68,11 +68,12 @@ class AuthService(
             throw IllegalArgumentException("Unknown currency code: $currency")
         }
 
-        val user = runBlocking { dataStore.getUserByEmail(email = email) }
+        val normEmail = email.trim().lowercase()
+        val user = runBlocking { dataStore.getUserByEmail(normEmail) }
 
         if (user != null) {
             if (user.emailVerified) {
-                throw IllegalArgumentException("User with email $email already exists")
+                throw IllegalArgumentException("User with email $normEmail already exists")
             }
             // Unverified user — clean up stale record and allow re-registration.
             // NOTE: There is a potential TOCTOU race here: two concurrent registrations for the
@@ -90,7 +91,7 @@ class AuthService(
         val newUser = User(
             userId = UUID.randomUUID(),
             currency = currency,
-            email = email,
+            email = normEmail,
             name = name,
             password = passwordEncoder.encode(password),
             emailVerified = false,
@@ -103,7 +104,7 @@ class AuthService(
             verificationCodeService.generateAndSend(
                 userId = newUser.userId,
                 type = VerificationType.REGISTRATION,
-                email = email,
+                email = normEmail,
                 name = name,
             )
         }
@@ -141,7 +142,8 @@ class AuthService(
     }
 
     suspend fun resendVerificationCode(email: String) {
-        val user = dataStore.getUserByEmail(email)
+        val normEmail = email.trim().lowercase()
+        val user = dataStore.getUserByEmail(normEmail)
             ?: throw IllegalArgumentException("No account found with that email address")
 
         if (user.emailVerified) {
@@ -152,7 +154,7 @@ class AuthService(
         verificationCodeService.resendForUser(
             userId = user.userId,
             type = VerificationType.REGISTRATION,
-            email = email,
+            email = normEmail,
             name = user.name,
         )
     }
@@ -228,14 +230,17 @@ class AuthService(
 
         val encodedNew = passwordEncoder.encode(newPassword)
         dataStore.updateUserPassword(userId, encodedNew)
+        // Revoke all existing sessions so stolen refresh tokens can no longer be used
+        refreshTokenService.revokeAllUserTokens(userId)
     }
 
     suspend fun forgotPassword(email: String) {
-        val user = dataStore.getUserByEmail(email) ?: return // silently ignore unknown emails
+        val user = dataStore.getUserByEmail(email.trim().lowercase()) ?: return // silently ignore unknown emails
+        if (!user.emailVerified) return // silently ignore unverified accounts — no tamper risk
         verificationCodeService.generateAndSend(
             userId = user.userId,
             type = VerificationType.PASSWORD_RESET,
-            email = email,
+            email = user.email,
             name = user.name,
         )
     }
@@ -245,5 +250,7 @@ class AuthService(
         val encodedNew = passwordEncoder.encode(newPassword)
         dataStore.updateUserPassword(verificationCode.userId, encodedNew)
         verificationCodeService.consume(code)
+        // Revoke all existing sessions so stolen refresh tokens can no longer be used
+        refreshTokenService.revokeAllUserTokens(verificationCode.userId)
     }
 }

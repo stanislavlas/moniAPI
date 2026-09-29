@@ -4,7 +4,6 @@ import kotlinx.coroutines.runBlocking
 import org.springframework.web.bind.annotation.*
 import moni.auth.JwtAuth
 import moni.common.getUser
-import moni.common.getUserId
 import moni.dataStore.IDataStoreClient
 import moni.models.api.DashboardResponse
 import java.time.LocalDate

@@ -14,4 +14,5 @@ data class VerificationCode(
     val type: VerificationType,
     val expiresAt: Instant,
     val resendCount: Int = 0,
+    val failedAttempts: Int = 0,
 )

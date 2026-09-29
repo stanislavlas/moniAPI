@@ -5,20 +5,36 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import moni.models.Amount
 import java.math.BigDecimal
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 import java.util.concurrent.TimeUnit
 
 @Service
 class CurrencyConversionService(
     private val objectMapper: ObjectMapper,
-    private val httpClient: OkHttpClient = OkHttpClient(),
+    private val httpClient: HttpClient = HttpClient.newBuilder()
+        .build(),
 ) {
     private val log = LoggerFactory.getLogger(CurrencyConversionService::class.java)
+
+    companion object {
+        private const val FRANKFURTER_BASE = "https://api.frankfurter.dev/v1"
+    }
+
+    // Minimum set of known-valid ISO 4217 codes used as a fallback when the
+    // frankfurter.dev /currencies endpoint is unreachable (e.g. at startup or
+    // during registration). Add more codes here as needed.
+    private val fallbackCurrencies: Map<String, String> = mapOf(
+        "CZK" to "Czech Koruna",
+        "EUR" to "Euro",
+        "USD" to "United States Dollar",
+    )
 
     // Per-pair rate cache — key: "FROM_TO", value: direct exchange rate
     // Caffeine evicts entries automatically after 24 h; thread-safe by design
@@ -55,31 +71,34 @@ class CurrencyConversionService(
 
     fun isValidCurrency(code: String): Boolean {
         if (code.isBlank()) return false
-        return getNames().containsKey(code)
+        // Check live/cached names first; fall back to the hardcoded set so that
+        // a transient API outage never blocks registrations for known currencies.
+        return getNames().containsKey(code) || fallbackCurrencies.containsKey(code)
     }
 
     fun getCurrencyNames(): Map<String, String> = getNames()
 
     private fun getNames(): Map<String, String> =
-        namesCache.get("all") { fetchNames() } ?: emptyMap()
+        namesCache.get("all") { fetchNames() } ?: fallbackCurrencies
 
     private fun fetchRate(from: String, to: String): BigDecimal? {
         return try {
-            val url = "https://api.frankfurter.app/latest?from=$from&to=$to"
-            val request = Request.Builder().url(url).build()
-            httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    log.warn("frankfurter.app rate fetch $from→$to returned HTTP ${response.code}")
-                    return null
-                }
-                val body = response.body?.string() ?: return null
-                val parsed = objectMapper.readValue<Map<String, Any>>(body)
-                @Suppress("UNCHECKED_CAST")
-                val rates = parsed["rates"] as? Map<String, Any> ?: return null
-                val value = rates[to] ?: return null
-                log.debug("Fetched rate $from→$to = $value")
-                BigDecimal(value.toString())
+            val url = "$FRANKFURTER_BASE/latest?from=$from&to=$to"
+            val request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .GET()
+                .build()
+            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+            if (response.statusCode() != 200) {
+                log.warn("frankfurter.dev rate fetch $from→$to returned HTTP ${response.statusCode()}")
+                return null
             }
+            val parsed = objectMapper.readValue<Map<String, Any>>(response.body())
+            @Suppress("UNCHECKED_CAST")
+            val rates = parsed["rates"] as? Map<String, Any> ?: return null
+            val value = rates[to] ?: return null
+            log.debug("Fetched rate $from→$to = $value")
+            BigDecimal(value.toString())
         } catch (e: Exception) {
             log.warn("Failed to fetch rate $from→$to: ${e.message}")
             null
@@ -88,19 +107,18 @@ class CurrencyConversionService(
 
     private fun fetchNames(): Map<String, String>? {
         return try {
-            val request = Request.Builder()
-                .url("https://api.frankfurter.app/currencies")
+            val request = HttpRequest.newBuilder()
+                .uri(URI.create("$FRANKFURTER_BASE/currencies"))
+                .GET()
                 .build()
-            httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    log.warn("frankfurter.app /currencies returned HTTP ${response.code}")
-                    return null
-                }
-                val body = response.body?.string() ?: return null
-                val names = objectMapper.readValue<Map<String, String>>(body)
-                log.info("Currency names refreshed: ${names.size} currencies")
-                names
+            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+            if (response.statusCode() != 200) {
+                log.warn("frankfurter.dev /currencies returned HTTP ${response.statusCode()}")
+                return null
             }
+            val names = objectMapper.readValue<Map<String, String>>(response.body())
+            log.info("Currency names refreshed: ${names.size} currencies")
+            names
         } catch (e: Exception) {
             log.warn("Failed to fetch currency names: ${e.message}")
             null

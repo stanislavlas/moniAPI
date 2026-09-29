@@ -48,7 +48,7 @@ STANISLAV_COLS = {
     "Entertainment":("Entertainment","EXPENSE",    "OPTIONAL"),
     "Other":        ("Other",        "EXPENSE",    "OPTIONAL"),
     "ETF":          ("Stocks",       "INVESTMENT", "NECESSARY"),
-    "Indepedence":  ("Savings",      "INVESTMENT", "NECESSARY"),
+    "Independence":  ("Savings",      "INVESTMENT", "NECESSARY"),
 }
 
 LEA_COLS = {
@@ -156,7 +156,7 @@ def send_entries(entries: list, token: str) -> None:
             },
             data=json.dumps(entry),
         )
-        if resp.status_code == 200:
+        if resp.status_code in (200, 201):
             ok += 1
         else:
             errors += 1

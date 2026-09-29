@@ -1,10 +1,10 @@
 package moni.household
 
 import kotlinx.coroutines.runBlocking
-import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import moni.auth.JwtAuth
 import moni.common.getUserId
+import moni.common.successResponse
 import moni.models.internal.HouseholdInvitation
 import java.util.UUID
 
@@ -61,10 +61,10 @@ class HouseholdInvitationController(
     fun cancelInvitation(
         @RequestHeader("Authorization") authorization: String,
         @PathVariable invitationId: String,
-    ): ResponseEntity<Map<String, Boolean>> {
+    ): Map<String, Boolean> {
         val userId = authorization.getUserId(jwtAuth)
         runBlocking { invitationService.cancelInvitation(userId, UUID.fromString(invitationId)) }
-        return ResponseEntity.ok(mapOf("success" to true))
+        return successResponse()
     }
 }
 

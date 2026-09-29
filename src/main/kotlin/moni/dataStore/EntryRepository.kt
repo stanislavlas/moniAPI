@@ -222,7 +222,7 @@ class EntryRepository(
             date = LocalDate.parse(item[DATE_ATTRIBUTE]?.asS() ?: throw IllegalStateException("Missing date")),
             name = item[NAME_ATTRIBUTE]?.asS() ?: throw IllegalStateException("Missing name"),
             note = item[NOTE_ATTRIBUTE]?.asS() ?: "",
-            type = TransactionType.valueOf(item[TYPE_ATTRIBUTE]?.asS() ?: throw IllegalStateException("Missing type")),
+            type = TransactionType.fromStringOrUnsupported(item[TYPE_ATTRIBUTE]?.asS() ?: throw IllegalStateException("Missing type")),
             necessity = Necessity.fromString(item[NECESSITY_ATTRIBUTE]?.asS() ?: throw IllegalStateException("Missing necessity")),
             authorName = item[AUTHOR_NAME_ATTRIBUTE]?.asS() ?: throw IllegalStateException("Missing authorName"),
             createdAt = Instant.ofEpochSecond(item[CREATED_AT_ATTRIBUTE]?.asN()?.toLong() ?: throw IllegalStateException("Missing createdAt"))

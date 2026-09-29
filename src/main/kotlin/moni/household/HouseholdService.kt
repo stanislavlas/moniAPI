@@ -3,6 +3,7 @@ package moni.household
 import org.springframework.stereotype.Service
 import moni.category.CategoryService
 import moni.config.ForbiddenException
+import moni.dataStore.HouseholdInvitationRepository
 import moni.dataStore.HouseholdRepository
 import moni.dataStore.IDataStoreClient
 import moni.models.internal.Household
@@ -15,6 +16,7 @@ class HouseholdService(
     private val householdRepository: HouseholdRepository,
     private val dataStoreClient: IDataStoreClient,
     private val categoryService: CategoryService,
+    private val invitationRepository: HouseholdInvitationRepository,
 ) {
 
     suspend fun getHouseholdByUserId(userId: UUID): Household? {
@@ -56,6 +58,12 @@ class HouseholdService(
             val memberUser = dataStoreClient.getUserById(member.userId)
             dataStoreClient.putUser(memberUser.copy(householdId = null, householdRole = null))
         }
+
+        // Delete all pending/historic invitations so they don't accumulate as orphans
+        invitationRepository.findByHouseholdId(householdId).forEach { invitation ->
+            invitationRepository.delete(invitation.invitationId)
+        }
+
         householdRepository.delete(householdId)
     }
 

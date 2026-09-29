@@ -1,7 +1,6 @@
 package moni.auth
 
 import io.jsonwebtoken.Jwts
-import io.jsonwebtoken.SignatureAlgorithm
 import jakarta.annotation.PostConstruct
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
@@ -19,10 +18,11 @@ class JwtAuth(
 ){
     @PostConstruct
     fun validateSecret() {
-        if (secret == DEV_ONLY_SECRET || secret.length < 32) {
+        val decodedLength = runCatching { Base64.getDecoder().decode(secret).size }.getOrDefault(0)
+        if (secret == DEV_ONLY_SECRET || decodedLength < 32) {
             throw IllegalStateException(
                 "JWT_SECRET is insecure or missing. " +
-                "Set a base64-encoded secret of at least 32 bytes via the JWT_SECRET environment variable."
+                "Set a base64-encoded secret of at least 32 bytes (≥ 44 base64 chars) via the JWT_SECRET environment variable."
             )
         }
     }
@@ -36,10 +36,10 @@ class JwtAuth(
     fun generateJWT(userId: UUID): String {
         val now = Instant.now()
         return Jwts.builder()
-            .setSubject(userId.toString())
-            .setIssuedAt(Date.from(now))
-            .setExpiration(Date.from(now.plus(15, ChronoUnit.MINUTES)))
-            .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+            .subject(userId.toString())
+            .issuedAt(Date.from(now))
+            .expiration(Date.from(now.plus(15, ChronoUnit.MINUTES)))
+            .signWith(getSigningKey())
             .compact()
     }
 
@@ -53,11 +53,11 @@ class JwtAuth(
     }
 
     fun getUserIdFromJWT(jwt: String): UUID {
-        val userIdString = Jwts.parserBuilder()
-            .setSigningKey(getSigningKey())
+        val userIdString = Jwts.parser()
+            .verifyWith(getSigningKey())
             .build()
-            .parseClaimsJws(jwt)
-            .body
+            .parseSignedClaims(jwt)
+            .payload
             .subject
 
         return UUID.fromString(userIdString)

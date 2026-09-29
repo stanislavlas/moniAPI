@@ -30,5 +30,11 @@ enum class TransactionType {
     INVESTMENT,
 
     @com.fasterxml.jackson.annotation.JsonEnumDefaultValue
-    UNSUPPORTED,
+    UNSUPPORTED;
+
+    companion object {
+        /** Safe alternative to [valueOf] — returns [UNSUPPORTED] for any unrecognised string. */
+        fun fromStringOrUnsupported(value: String): TransactionType =
+            runCatching { valueOf(value) }.getOrDefault(UNSUPPORTED)
+    }
 }

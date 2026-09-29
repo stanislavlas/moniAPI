@@ -1,9 +1,7 @@
 package moni.entry
 
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import org.springframework.stereotype.Service
+import moni.common.UserResolver
 import moni.currency.CurrencyConversionService
 import moni.dataStore.EntryRepository
 import moni.dataStore.HouseholdRepository
@@ -16,6 +14,7 @@ import moni.models.internal.Necessity
 import java.time.Instant
 import java.time.LocalDate
 import java.util.*
+
 @Service
 class EntryService(
     private val entryRepository: EntryRepository,
@@ -23,6 +22,7 @@ class EntryService(
     private val dataStoreClient: IDataStoreClient,
     private val currencyConversionService: CurrencyConversionService,
     private val householdService: HouseholdService,
+    private val userResolver: UserResolver,
 ) {
     /**
      * Returns distinct year integers for all years that contain at least one entry.
@@ -65,7 +65,7 @@ class EntryService(
         }
 
         // Resolve current user names — authorName is snapshotted at write time and may be stale
-        val currentNames = resolveCurrentNames(entries.map { it.userId }.distinct())
+        val currentNames = userResolver.resolveNames(entries.map { it.userId }.distinct())
 
         return entries.map { entry ->
             entry.copy(
@@ -73,16 +73,6 @@ class EntryService(
                 authorName = currentNames[entry.userId] ?: entry.authorName
             )
         }
-    }
-
-    /** Fetches the current name for each unique userId concurrently. */
-    private suspend fun resolveCurrentNames(userIds: List<UUID>): Map<UUID, String> = coroutineScope {
-        userIds.map { id ->
-            async {
-                try { id to dataStoreClient.getUserById(id).name }
-                catch (_: Exception) { id to null }
-            }
-        }.awaitAll().mapNotNull { (id, name) -> name?.let { id to it } }.toMap()
     }
 
     suspend fun createEntry(

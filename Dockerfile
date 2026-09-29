@@ -19,9 +19,8 @@ FROM ghcr.io/home-assistant/base:latest
 # Install JRE 21
 RUN apk add --no-cache openjdk21-jre-headless curl
 
-# Copy built JAR and config
+# Copy built JAR
 COPY --from=builder /app/build/libs/*.jar /app/app.jar
-COPY application.properties /app/application.properties
 
 # Copy entrypoint
 COPY run.sh /run.sh

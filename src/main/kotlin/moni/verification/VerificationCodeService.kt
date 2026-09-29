@@ -11,6 +11,7 @@ import java.util.UUID
 
 private const val CODE_EXPIRY_SECONDS = 5 * 60L  // 5 minutes
 private const val MAX_RESEND_ATTEMPTS = 3
+private const val MAX_FAILED_ATTEMPTS = 5
 
 @Service
 class VerificationCodeService(
@@ -25,6 +26,9 @@ class VerificationCodeService(
         email: String,
         name: String,
     ): VerificationCode {
+        // Remove any pre-existing code for this user to prevent orphaned records
+        // when generateAndSend is called more than once (e.g. forgotPassword called twice).
+        repository.deleteAllForUser(userId)
         val code = String.format("%06d", random.nextInt(1_000_000))
         val verificationCode = VerificationCode(
             code = code,
@@ -50,6 +54,17 @@ class VerificationCodeService(
             throw IllegalArgumentException("Verification code has expired")
         }
 
+        // Brute-force guard: track wrong guesses and lock after MAX_FAILED_ATTEMPTS
+        if (stored.code != code) {
+            val updated = stored.copy(failedAttempts = stored.failedAttempts + 1)
+            if (updated.failedAttempts >= MAX_FAILED_ATTEMPTS) {
+                repository.deleteByCode(code)
+                throw IllegalArgumentException("Too many failed attempts. Please request a new code.")
+            }
+            repository.save(updated)
+            throw IllegalArgumentException("Invalid verification code")
+        }
+
         return stored
     }
 
@@ -57,7 +72,7 @@ class VerificationCodeService(
         repository.deleteByCode(code)
     }
 
-    suspend fun deleteAllForUser(userId: java.util.UUID) {
+    suspend fun deleteAllForUser(userId: UUID) {
         repository.deleteAllForUser(userId)
     }
 
@@ -67,7 +82,7 @@ class VerificationCodeService(
      * If no existing code is found, generates a fresh one.
      */
     suspend fun resendForUser(
-        userId: java.util.UUID,
+        userId: UUID,
         type: VerificationType,
         email: String,
         name: String,

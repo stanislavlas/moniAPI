@@ -105,7 +105,7 @@ class CategoryRepository(
             name        = item[NAME_ATTRIBUTE]?.asS()  ?: error("Missing name"),
             emoji       = item[EMOJI_ATTRIBUTE]?.asS() ?: error("Missing emoji"),
             color       = item[COLOR_ATTRIBUTE]?.asS() ?: error("Missing color"),
-            type        = TransactionType.valueOf(item[TYPE_ATTRIBUTE]?.asS() ?: error("Missing type")),
+            type        = TransactionType.fromStringOrUnsupported(item[TYPE_ATTRIBUTE]?.asS() ?: error("Missing type")),
             isDefault   = item[IS_DEFAULT_ATTRIBUTE]?.asBool() ?: false,
             createdAt   = Instant.ofEpochSecond(item[CREATED_AT_ATTRIBUTE]?.asN()?.toLong() ?: error("Missing createdAt")),
             ownerKey    = item[OWNER_KEY_ATTRIBUTE]?.asS(),

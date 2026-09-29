@@ -7,6 +7,7 @@ import io.mockk.slot
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import moni.common.UserResolver
 import moni.currency.CurrencyConversionService
 import moni.dataStore.EntryRepository
 import moni.dataStore.HouseholdRepository
@@ -28,6 +29,7 @@ class EntryServiceTest {
     private val dataStoreClient           = mockk<IDataStoreClient>()
     private val currencyConversionService = mockk<CurrencyConversionService>()
     private val householdService          = mockk<HouseholdService>()
+    private val userResolver              = mockk<UserResolver>()
 
     private val service = EntryService(
         entryRepository,
@@ -35,6 +37,7 @@ class EntryServiceTest {
         dataStoreClient,
         currencyConversionService,
         householdService,
+        userResolver,
     )
 
     private val userId = UUID.randomUUID()
@@ -68,7 +71,7 @@ class EntryServiceTest {
             name        = "ETF purchase",
             note        = "",
             type        = TransactionType.INVESTMENT,
-            necessity   = Necessity.NEED,
+            necessity   = Necessity.NECESSARY,
         )
 
         assertEquals(TransactionType.INVESTMENT, result.type)
@@ -89,12 +92,13 @@ class EntryServiceTest {
             name        = "ETF",
             note        = "",
             type        = TransactionType.INVESTMENT,
-            necessity   = Necessity.NEED,
+            necessity   = Necessity.NECESSARY,
             authorName  = "Alice",
         )
 
         coEvery { entryRepository.findByUserId(userId, any(), any()) } returns listOf(investEntry)
         coEvery { currencyConversionService.convertAmount(any(), "EUR") } answers { firstArg() }
+        coEvery { userResolver.resolveNames(any()) } returns emptyMap()
 
         val result = service.getEntries(
             userId         = userId,

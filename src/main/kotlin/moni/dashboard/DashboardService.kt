@@ -1,13 +1,10 @@
 package moni.dashboard
 
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import org.springframework.stereotype.Service
+import moni.common.UserResolver
 import moni.currency.CurrencyConversionService
 import moni.dataStore.EntryRepository
 import moni.dataStore.HouseholdRepository
-import moni.dataStore.IDataStoreClient
 import moni.household.HouseholdService
 import moni.models.Amount
 import moni.models.TransactionType
@@ -29,7 +26,7 @@ class DashboardService(
     private val householdRepository: HouseholdRepository,
     private val currencyConversionService: CurrencyConversionService,
     private val householdService: HouseholdService,
-    private val dataStoreClient: IDataStoreClient,
+    private val userResolver: UserResolver,
 ) {
     suspend fun getDashboard(
         userId: UUID,
@@ -81,7 +78,7 @@ class DashboardService(
         val recentRaw = entries
             .sortedByDescending { it.createdAt }
             .take(10)
-        val currentNames = resolveCurrentNames(recentRaw.map { it.userId }.distinct())
+        val currentNames = userResolver.resolveNames(recentRaw.map { it.userId }.distinct())
         val recentEntries = recentRaw.map { entry ->
             entry.copy(authorName = currentNames[entry.userId] ?: entry.authorName)
         }
@@ -102,15 +99,5 @@ class DashboardService(
             recentEntries = recentEntries,
             householdName = householdName
         )
-    }
-
-    /** Fetches the current name for each unique userId concurrently. */
-    private suspend fun resolveCurrentNames(userIds: List<UUID>): Map<UUID, String> = coroutineScope {
-        userIds.map { id ->
-            async {
-                try { id to dataStoreClient.getUserById(id).name }
-                catch (_: Exception) { id to null }
-            }
-        }.awaitAll().mapNotNull { (id, name) -> name?.let { id to it } }.toMap()
     }
 }

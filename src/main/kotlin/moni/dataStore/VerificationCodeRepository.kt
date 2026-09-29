@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import org.springframework.stereotype.Repository
 import moni.models.internal.VerificationCode
+import java.util.UUID
 
 private const val VERIFICATION_TABLE = "moni_verification_codes"
 private const val CODE_ATTRIBUTE = "code"
@@ -38,7 +39,7 @@ class VerificationCodeRepository(
         dynamoClient.putItem(reverseRequest)
     }
 
-    suspend fun findByUserId(userId: java.util.UUID): VerificationCode? {
+    suspend fun findByUserId(userId: UUID): VerificationCode? {
         val request = GetItemRequest {
             tableName = VERIFICATION_TABLE
             key = mapOf(CODE_ATTRIBUTE to AttributeValue.S("user:$userId"))
@@ -78,7 +79,7 @@ class VerificationCodeRepository(
         }
     }
 
-    suspend fun deleteAllForUser(userId: java.util.UUID) {
+    suspend fun deleteAllForUser(userId: UUID) {
         // Find the code via the reverse-lookup record (O(1)) and delete both DynamoDB
         // records in one call. deleteByCode removes the primary code record AND the
         // "user:<userId>" reverse-lookup record, so no second DeleteItem is needed.

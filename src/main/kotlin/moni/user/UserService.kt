@@ -65,12 +65,18 @@ class UserService(
             if (existing != null && existing.userId != userId) {
                 throw IllegalArgumentException("Email address is already in use")
             }
-            return runBlocking {
-                dataStoreClient.updateUser(
-                    userId, name, currency, normalizedEmail,
-                    notificationsEnabled, notificationFrequency, notificationCustomDays, notificationTime,
-                )
-            }
+            // Build the updated user from the already-fetched record to avoid a second DB read
+            val updated = user.copy(
+                name                   = name                   ?: user.name,
+                currency               = currency               ?: user.currency,
+                email                  = normalizedEmail,
+                notificationsEnabled   = notificationsEnabled   ?: user.notificationsEnabled,
+                notificationFrequency  = notificationFrequency  ?: user.notificationFrequency,
+                notificationCustomDays = notificationCustomDays ?: user.notificationCustomDays,
+                notificationTime       = notificationTime       ?: user.notificationTime,
+            )
+            runBlocking { dataStoreClient.putUser(updated) }
+            return updated
         }
 
         return runBlocking {

@@ -2,6 +2,7 @@ package moni.models.internal
 
 import moni.models.Currency
 import moni.models.api.User
+import java.time.Instant
 import java.util.UUID
 
 data class User(
@@ -16,7 +17,8 @@ data class User(
     val notificationsEnabled: Boolean = false,
     val notificationFrequency: String = "daily",   // "daily" | "weekly" | "monthly" | "custom"
     val notificationCustomDays: Int = 1,            // used when frequency == "custom"
-    val notificationTime: String = "20:00",         // "HH:mm" in local device time
+    val notificationTime: String = "20:00",         // "HH:mm" in UTC — frontend converts from local time before storing
+    val nextTriggerAt: Instant? = null,             // UTC instant when the next push should fire
 ) {
     fun toApi() = User(
         currency = this.currency,

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import org.springframework.stereotype.Component
 import moni.models.internal.User
+import java.time.Instant
 import java.util.*
 
 private const val USER_TABLE_NAME = "moni_users"
@@ -35,7 +36,7 @@ class DynamoClient(
             return null
         }
 
-        val data = items.first()[DATA_ATTRIBUTE]?.asS() ?: throw Exception("User with email: $email contains incorrect data")
+        val data = items.first()[DATA_ATTRIBUTE]?.asS() ?: throw IllegalStateException("User record is missing data field")
         return objectMapper.readValue(data)
     }
 
@@ -51,7 +52,7 @@ class DynamoClient(
             throw NoSuchElementException("User not found")
         }
 
-        val data = item[DATA_ATTRIBUTE]?.asS() ?: throw Exception("User with id: $userId contains incorrect data")
+        val data = item[DATA_ATTRIBUTE]?.asS() ?: throw IllegalStateException("User record is missing data field")
         return objectMapper.readValue(data)
     }
 
@@ -77,7 +78,17 @@ class DynamoClient(
         dynamoClient.deleteItem(request)
     }
 
-    override suspend fun updateUser(userId: UUID, name: String?, currency: String?, email: String?, notificationsEnabled: Boolean?, notificationFrequency: String?, notificationCustomDays: Int?, notificationTime: String?): moni.models.internal.User {
+    override suspend fun updateUser(
+        userId: UUID,
+        name: String?,
+        currency: String?,
+        email: String?,
+        notificationsEnabled: Boolean?,
+        notificationFrequency: String?,
+        notificationCustomDays: Int?,
+        notificationTime: String?,
+        nextTriggerAt: Instant?,
+    ): moni.models.internal.User {
         val existing = getUserById(userId)
         val updated = existing.copy(
             name                   = name                   ?: existing.name,
@@ -87,6 +98,7 @@ class DynamoClient(
             notificationFrequency  = notificationFrequency  ?: existing.notificationFrequency,
             notificationCustomDays = notificationCustomDays ?: existing.notificationCustomDays,
             notificationTime       = notificationTime       ?: existing.notificationTime,
+            nextTriggerAt          = nextTriggerAt          ?: existing.nextTriggerAt,
         )
         putUser(updated)
         return updated
@@ -97,5 +109,36 @@ class DynamoClient(
         val updated = existing.copy(password = encodedPassword)
         putUser(updated)
         return updated
+    }
+
+    /**
+     * Full table scan to find users with notifications enabled and a nextTriggerAt <= [before].
+     * Acceptable at personal-finance scale (small user base).
+     */
+    override suspend fun getUsersDueForNotification(before: Instant): List<User> {
+        val results = mutableListOf<User>()
+        var lastKey: Map<String, AttributeValue>? = null
+        do {
+            val resp = dynamoClient.scan(ScanRequest {
+                tableName = USER_TABLE_NAME
+                exclusiveStartKey = lastKey
+            })
+            resp.items?.forEach { item ->
+                val data = item[DATA_ATTRIBUTE]?.asS() ?: return@forEach
+                try {
+                    val user: User = objectMapper.readValue(data)
+                    if (user.notificationsEnabled && user.nextTriggerAt != null && !user.nextTriggerAt.isAfter(before)) {
+                        results += user
+                    }
+                } catch (_: Exception) { /* skip malformed records */ }
+            }
+            lastKey = resp.lastEvaluatedKey?.takeIf { it.isNotEmpty() }
+        } while (lastKey != null)
+        return results
+    }
+
+    override suspend fun updateNextTriggerAt(userId: UUID, next: Instant) {
+        val existing = getUserById(userId)
+        putUser(existing.copy(nextTriggerAt = next))
     }
 }

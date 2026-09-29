@@ -6,6 +6,9 @@ import org.springframework.stereotype.Service
 import moni.currency.CurrencyConversionService
 import moni.dataStore.IDataStoreClient
 import moni.models.internal.User
+import moni.notifications.NotificationScheduler
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.*
 
 @Service
@@ -13,6 +16,7 @@ class UserService(
     private val dataStoreClient: IDataStoreClient,
     private val currencyConversionService: CurrencyConversionService,
     private val passwordEncoder: PasswordEncoder,
+    private val notificationScheduler: NotificationScheduler,
 ) {
 
     fun getUser(userId: UUID): User? {
@@ -52,6 +56,28 @@ class UserService(
             }
         }
 
+        // Recompute nextTriggerAt only when notification prefs actually change value.
+        // Resetting on every save (even with identical values) would postpone the next
+        // notification by up to 24 hours unnecessarily.
+        val notifPrefsChanged = notificationsEnabled != null || notificationFrequency != null
+                || notificationCustomDays != null || notificationTime != null
+        val nextTriggerAt: Instant? = if (notifPrefsChanged) {
+            val existing = runBlocking { dataStoreClient.getUserById(userId) }
+            val merged = existing.copy(
+                notificationsEnabled   = notificationsEnabled   ?: existing.notificationsEnabled,
+                notificationFrequency  = notificationFrequency  ?: existing.notificationFrequency,
+                notificationCustomDays = notificationCustomDays ?: existing.notificationCustomDays,
+                notificationTime       = notificationTime       ?: existing.notificationTime,
+            )
+            val prefsActuallyChanged = merged.notificationsEnabled != existing.notificationsEnabled
+                || merged.notificationFrequency != existing.notificationFrequency
+                || merged.notificationCustomDays != existing.notificationCustomDays
+                || merged.notificationTime != existing.notificationTime
+            if (prefsActuallyChanged && merged.notificationsEnabled)
+                notificationScheduler.computeNext(merged)
+            else null
+        } else null
+
         if (email != null) {
             if (currentPassword == null) {
                 throw IllegalArgumentException("Current password is required to change email")
@@ -69,6 +95,7 @@ class UserService(
                 dataStoreClient.updateUser(
                     userId, name, currency, normalizedEmail,
                     notificationsEnabled, notificationFrequency, notificationCustomDays, notificationTime,
+                    nextTriggerAt,
                 )
             }
         }
@@ -77,6 +104,7 @@ class UserService(
             dataStoreClient.updateUser(
                 userId, name, currency, null,
                 notificationsEnabled, notificationFrequency, notificationCustomDays, notificationTime,
+                nextTriggerAt,
             )
         }
     }

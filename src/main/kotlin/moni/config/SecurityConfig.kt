@@ -24,6 +24,7 @@ class SecurityConfig(
                         "/api/health",
                         "/api/auth/*",
                         "/api/currencies",
+                        "/api/notifications/vapid-public-key",
                     ).permitAll()
                     .anyRequest().authenticated()
             }

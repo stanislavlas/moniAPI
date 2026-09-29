@@ -1,6 +1,7 @@
 package moni.dataStore
 
 import moni.models.internal.User
+import java.time.Instant
 import java.util.*
 
 interface IDataStoreClient {
@@ -17,6 +18,10 @@ interface IDataStoreClient {
         notificationFrequency: String? = null,
         notificationCustomDays: Int? = null,
         notificationTime: String? = null,
+        nextTriggerAt: Instant? = null,
     ): User
     suspend fun updateUserPassword(userId: UUID, encodedPassword: String): User
+    /** Return all users whose nextTriggerAt is non-null and <= [before], with notificationsEnabled = true. */
+    suspend fun getUsersDueForNotification(before: Instant): List<User>
+    suspend fun updateNextTriggerAt(userId: UUID, next: Instant)
 }

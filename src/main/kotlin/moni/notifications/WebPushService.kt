@@ -48,9 +48,11 @@ class WebPushService(
     @Value("\${vapid.publicKey}")  private val vapidPublicKeyB64:  String,
     @Value("\${vapid.privateKey}") private val vapidPrivateKeyB64: String,
     @Value("\${vapid.subject:mailto:moni@localhost}") private val subject: String,
-    @Value("\${fcm.projectId:}")   private val fcmProjectId:   String,
-    @Value("\${fcm.clientEmail:}") private val fcmClientEmail: String,
-    @Value("\${fcm.privateKey:}")  private val fcmPrivateKeyRaw: String,
+    @Value("\${fcm.projectId:}")    private val fcmProjectId:     String,
+    @Value("\${fcm.clientEmail:}")  private val fcmClientEmail:   String,
+    @Value("\${fcm.privateKey:}")   private val fcmPrivateKeyRaw: String,
+    @Value("\${fcm.clientId:}")     private val fcmClientId:      String,
+    @Value("\${fcm.privateKeyId:}") private val fcmPrivateKeyId:  String,
     private val objectMapper: ObjectMapper,
 ) {
     private val httpClient = OkHttpClient()
@@ -99,7 +101,8 @@ class WebPushService(
         }
 
         // Initialise Firebase Admin SDK for FCM v1
-        if (fcmProjectId.isNotBlank() && fcmClientEmail.isNotBlank() && fcmPrivateKeyRaw.isNotBlank()) {
+        if (fcmProjectId.isNotBlank() && fcmClientEmail.isNotBlank() && fcmPrivateKeyRaw.isNotBlank()
+            && fcmClientId.isNotBlank() && fcmPrivateKeyId.isNotBlank()) {
             try {
                 // Reconstruct the service account JSON from individual env vars
                 val serviceAccountJson = """
@@ -107,6 +110,8 @@ class WebPushService(
                         "type": "service_account",
                         "project_id": "$fcmProjectId",
                         "client_email": "$fcmClientEmail",
+                        "client_id": "$fcmClientId",
+                        "private_key_id": "$fcmPrivateKeyId",
                         "private_key": "${fcmPrivateKeyRaw.replace("\\n", "\n")}",
                         "token_uri": "https://oauth2.googleapis.com/token"
                     }

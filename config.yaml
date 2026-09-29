@@ -2,7 +2,7 @@ name: "Moni API"
 description: "Kotlin/Spring Boot REST API for Moni app"
 # Bump version on every push so HA shows "Update available" in the add-on store.
 # Use MAJOR.MINOR.PATCH: patch for bug fixes, minor for new features.
-version: "1.2.7"
+version: "1.2.8"
 slug: "moni-api"
 init: false
 host_network: true
@@ -22,6 +22,8 @@ options:
   fcm_project_id: ""
   fcm_client_email: ""
   fcm_private_key: ""
+  fcm_client_id: ""
+  fcm_private_key_id: ""
 schema:
   jwt_secret: str
   cors_allowed_origins: str
@@ -31,3 +33,5 @@ schema:
   fcm_project_id: str
   fcm_client_email: str
   fcm_private_key: str
+  fcm_client_id: str
+  fcm_private_key_id: str

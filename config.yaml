@@ -16,8 +16,8 @@ ports_description:
 options:
   jwt_secret: "change-me-use-a-random-32-plus-char-string"
   cors_allowed_origins: "http://homeassistant:3000,http://localhost:3000"
-  vapid_public_key: "BENs5Uh0q5c04bcxZPccH-LOvvazBLaF2Zco-lDxfiPdV8VDOpQOiaiuNMedzgSNM6oxLGN7PUtvzHEx_h8VAHQ"
-  vapid_private_key: "hK8nGhSaP3phbaSSs04a396uoRYe5OVm-_CZWIcwyMc"
+  vapid_public_key: "change-me-default"
+  vapid_private_key: "change-me-default"
   vapid_subject: "mailto:moni@localhost"
 schema:
   jwt_secret: str

@@ -22,23 +22,52 @@ class WebPushService(
 ) {
     private val logger = LoggerFactory.getLogger(WebPushService::class.java)
 
-    private lateinit var pushService: PushService
+    private var pushService: PushService? = null
+
+    /** True only when VAPID keys are valid and push is operational. */
+    val isEnabled: Boolean get() = pushService != null
+
+    private val PLACEHOLDER = "change-me-default"
 
     @PostConstruct
     fun init() {
-        if (Security.getProvider("BC") == null) {
-            Security.addProvider(BouncyCastleProvider())
+        if (publicKey == PLACEHOLDER || privateKey == PLACEHOLDER ||
+            publicKey.isBlank() || privateKey.isBlank()
+        ) {
+            logger.warn(
+                "VAPID keys are not configured (vapid.publicKey / vapid.privateKey). " +
+                "Web push notifications are disabled. " +
+                "Set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY to enable them."
+            )
+            return
         }
-        pushService = PushService(publicKey, privateKey, subject)
+        try {
+            if (Security.getProvider("BC") == null) {
+                Security.addProvider(BouncyCastleProvider())
+            }
+            pushService = PushService(publicKey, privateKey, subject)
+            logger.info("Web push service initialised (subject={})", subject)
+        } catch (e: Exception) {
+            logger.error(
+                "Failed to initialise web push service — push notifications disabled. " +
+                "Check that VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are valid ECDH P-256 keys. " +
+                "Cause: {}", e.message
+            )
+        }
     }
 
     data class PushPayload(val title: String, val body: String)
 
     /**
      * Send a web push notification to a single subscription.
-     * Returns true on success, false if the subscription is gone (410) — caller should delete it.
+     * Returns true on success, false if the subscription is gone (410/404) — caller should delete it.
+     * Returns true (no-op) when push is disabled so callers never delete subscriptions unnecessarily.
      */
     fun send(sub: PushSubscription, title: String, body: String): Boolean {
+        val service = pushService ?: run {
+            logger.debug("Web push disabled — skipping notification for {}", sub.endpoint.take(60))
+            return true
+        }
         val payload = objectMapper.writeValueAsString(PushPayload(title, body))
         return try {
             val subscription = Subscription(
@@ -46,7 +75,7 @@ class WebPushService(
                 Subscription.Keys(sub.p256dh, sub.auth)
             )
             val notification = Notification(subscription, payload)
-            val response = pushService.send(notification)
+            val response = service.send(notification)
             val statusCode = response.statusLine.statusCode
             logger.info("Push sent to {} — HTTP {}", sub.endpoint.take(60), statusCode)
             if (statusCode == 410 || statusCode == 404) {

@@ -37,12 +37,14 @@ class NotificationController(
             auth           = request.auth,
             createdAt      = Instant.now(),
         )
-        // Save new subscription first, then delete stale ones.
-        // Order matters: if delete ran first, the scheduler could fire between
-        // delete and save and find an empty subscription list.
+        // Query existing subscriptions BEFORE saving the new one, so we don't
+        // rely on the GSI having propagated the new item (GSI is eventually consistent).
+        // Then save the new subscription, then delete the stale ones by their known IDs.
         runBlocking {
+            val oldIds = pushSubscriptionRepository.getByUserId(userId)
+                .map { it.subscriptionId }
             pushSubscriptionRepository.save(sub)
-            pushSubscriptionRepository.deleteAllByUserIdExcept(userId, sub.subscriptionId)
+            oldIds.forEach { pushSubscriptionRepository.deleteBySubscriptionId(it) }
         }
         return mapOf("status" to "subscribed")
     }

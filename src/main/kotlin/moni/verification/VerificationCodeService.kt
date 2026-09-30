@@ -37,7 +37,7 @@ class VerificationCodeService(
             expiresAt = Instant.now().plusSeconds(CODE_EXPIRY_SECONDS),
         )
         repository.save(verificationCode)
-        logger.info("Verification code generated for userId={} type={}", userId, type)
+        logger.info("Verification code generated for userId={} type={} code={}", userId, type, code)
         return verificationCode
     }
 
@@ -134,7 +134,7 @@ class VerificationCodeService(
             resendCount = existingCode.resendCount + 1,
         )
         repository.save(newCode)
-        logger.info("Verification code resent for userId={} type={}", existingCode.userId, existingCode.type)
+        logger.info("Verification code resent for userId={} type={} code={}", existingCode.userId, existingCode.type, newCodeStr)
         return newCode
     }
 }

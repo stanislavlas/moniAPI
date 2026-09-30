@@ -27,7 +27,18 @@ class HouseholdService(
     suspend fun getHouseholdByUserId(userId: UUID): Household? {
         val user = dataStoreClient.getUserById(userId)
         val householdId = user.householdId ?: return null
-        return householdRepository.findById(householdId)
+        val household = householdRepository.findById(householdId)
+
+        // Guard against stale householdId on the user record — the household may have been
+        // deleted or the user may have been removed as a member without the user record being
+        // updated (e.g. a partial write failure). If the user is not in the members list,
+        // clear the stale reference and return null so the UI correctly shows no household.
+        if (household == null || household.members.none { it.userId == userId }) {
+            dataStoreClient.putUser(user.copy(householdId = null, householdRole = null))
+            return null
+        }
+
+        return household
     }
 
     /** Direct lookup by householdId — avoids fetching the User record when the ID is already known. */

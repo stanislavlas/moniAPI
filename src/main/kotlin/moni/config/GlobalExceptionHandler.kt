@@ -52,7 +52,7 @@ class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException::class)
     fun handleIllegalArgumentException(ex: IllegalArgumentException, request: WebRequest): ResponseEntity<ErrorResponse> {
-        logger.error("Invalid argument at ${request.getDescription(false)}: ${ex.message}")
+        logger.warn("Invalid argument at ${request.getDescription(false)}: ${ex.message}")
 
         val errorResponse = ErrorResponse(
             message = ex.message ?: "Invalid argument",
@@ -64,7 +64,7 @@ class GlobalExceptionHandler {
 
     @ExceptionHandler(NoSuchElementException::class)
     fun handleNotFoundException(ex: NoSuchElementException, request: WebRequest): ResponseEntity<ErrorResponse> {
-        logger.error("Resource not found at ${request.getDescription(false)}: ${ex.message}")
+        logger.warn("Resource not found at ${request.getDescription(false)}: ${ex.message}")
 
         val errorResponse = ErrorResponse(
             message = ex.message ?: "Resource not found",
@@ -111,6 +111,19 @@ class GlobalExceptionHandler {
         )
 
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse)
+    }
+
+    /** Data integrity errors from repository mapTo*() methods — always 500, logged at ERROR. */
+    @ExceptionHandler(IllegalStateException::class)
+    fun handleIllegalStateException(ex: IllegalStateException, request: WebRequest): ResponseEntity<ErrorResponse> {
+        logger.error("Data integrity error at ${request.getDescription(false)}: ${ex.message}", ex)
+
+        val errorResponse = ErrorResponse(
+            message = "An unexpected error occurred",
+            details = request.getDescription(false).replace("uri=", "")
+        )
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse)
     }
 
     /** Malformed date/time strings (e.g. bad ISO date in request body) → 400. */

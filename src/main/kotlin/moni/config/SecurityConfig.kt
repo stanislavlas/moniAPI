@@ -22,7 +22,7 @@ class SecurityConfig(
                 it
                     .requestMatchers(
                         "/api/health",
-                        "/api/auth/*",
+                        "/api/auth/**",
                         "/api/currencies",
                         "/api/notifications/vapid-public-key",
                     ).permitAll()

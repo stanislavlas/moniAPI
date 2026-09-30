@@ -39,10 +39,14 @@ class CategoryRepository(
         putItem(category, ownerKey)
     }
 
-    /** Write a personal copy of [categoryId] for [userId] with a fresh categoryId. */
+    /**
+     * Write a personal copy of [categoryId] for [userId], preserving the original categoryId
+     * so existing entries that reference this category continue to resolve correctly after a
+     * household is deleted or a member leaves.
+     */
     suspend fun copyToUser(categoryId: UUID, userId: UUID) {
         val source = findById(categoryId) ?: return
-        save(source.copy(categoryId = UUID.randomUUID(), householdId = null), userId)
+        save(source.copy(householdId = null), userId)
     }
 
     suspend fun findGlobal(): List<Category> = queryByOwnerKey("global")

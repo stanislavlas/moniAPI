@@ -2,6 +2,9 @@ package moni.dataStore
 
 import aws.sdk.kotlin.services.dynamodb.DynamoDbClient
 import aws.sdk.kotlin.services.dynamodb.model.*
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import org.springframework.stereotype.Repository
 import moni.models.Amount
 import moni.models.TransactionType
@@ -50,48 +53,39 @@ class EntryRepository(
         return mapToEntry(item)
     }
 
-    suspend fun findByUserId(userId: UUID, fromDate: LocalDate?, toDate: LocalDate?): List<Entry> {
+    suspend fun findByUserId(userId: UUID, fromDate: LocalDate?, toDate: LocalDate?): List<Entry> =
+        queryEntriesByKey("userId-date-index", USER_ID_ATTRIBUTE, userId.toString(), fromDate, toDate)
+
+    suspend fun findByHouseholdId(householdId: UUID, fromDate: LocalDate?, toDate: LocalDate?): List<Entry> =
+        queryEntriesByKey("householdId-date-index", HOUSEHOLD_ID_ATTRIBUTE, householdId.toString(), fromDate, toDate)
+
+    /**
+     * Shared helper: queries [indexName] by [keyAttr] = [keyValue] with an optional date range,
+     * returning mapped [Entry] objects.
+     */
+    private suspend fun queryEntriesByKey(
+        indexName: String,
+        keyAttr: String,
+        keyValue: String,
+        fromDate: LocalDate?,
+        toDate: LocalDate?,
+    ): List<Entry> {
         val queryRequest = QueryRequest {
             tableName = ENTRY_TABLE
-            indexName = "userId-date-index"
+            this.indexName = indexName
 
             if (fromDate != null && toDate != null) {
-                keyConditionExpression = "$USER_ID_ATTRIBUTE = :userId AND #dateAttr BETWEEN :fromDate AND :toDate"
+                keyConditionExpression = "$keyAttr = :keyValue AND #dateAttr BETWEEN :fromDate AND :toDate"
                 expressionAttributeNames = mapOf("#dateAttr" to DATE_ATTRIBUTE)
                 expressionAttributeValues = mapOf(
-                    ":userId" to AttributeValue.S(userId.toString()),
-                    ":fromDate" to AttributeValue.S(fromDate.toString()),
-                    ":toDate" to AttributeValue.S(toDate.toString())
+                    ":keyValue"  to AttributeValue.S(keyValue),
+                    ":fromDate"  to AttributeValue.S(fromDate.toString()),
+                    ":toDate"    to AttributeValue.S(toDate.toString()),
                 )
             } else {
-                keyConditionExpression = "$USER_ID_ATTRIBUTE = :userId"
+                keyConditionExpression = "$keyAttr = :keyValue"
                 expressionAttributeValues = mapOf(
-                    ":userId" to AttributeValue.S(userId.toString())
-                )
-            }
-        }
-
-        val items = dynamoClient.query(queryRequest).items ?: return emptyList()
-        return items.map { mapToEntry(it) }
-    }
-
-    suspend fun findByHouseholdId(householdId: UUID, fromDate: LocalDate?, toDate: LocalDate?): List<Entry> {
-        val queryRequest = QueryRequest {
-            tableName = ENTRY_TABLE
-            indexName = "householdId-date-index"
-
-            if (fromDate != null && toDate != null) {
-                keyConditionExpression = "$HOUSEHOLD_ID_ATTRIBUTE = :householdId AND #dateAttr BETWEEN :fromDate AND :toDate"
-                expressionAttributeNames = mapOf("#dateAttr" to DATE_ATTRIBUTE)
-                expressionAttributeValues = mapOf(
-                    ":householdId" to AttributeValue.S(householdId.toString()),
-                    ":fromDate" to AttributeValue.S(fromDate.toString()),
-                    ":toDate" to AttributeValue.S(toDate.toString())
-                )
-            } else {
-                keyConditionExpression = "$HOUSEHOLD_ID_ATTRIBUTE = :householdId"
-                expressionAttributeValues = mapOf(
-                    ":householdId" to AttributeValue.S(householdId.toString())
+                    ":keyValue" to AttributeValue.S(keyValue),
                 )
             }
         }
@@ -183,9 +177,14 @@ class EntryRepository(
 
     /** Delete all entries authored by [userId] (personal entries only — household entries are left). */
     suspend fun deleteByUserId(userId: UUID) {
-        findByUserId(userId, fromDate = null, toDate = null).forEach { entry ->
-            delete(entry.entryId)
-        }
+        val entries = findByUserId(userId, fromDate = null, toDate = null)
+        coroutineScope { entries.map { async { delete(it.entryId) } }.awaitAll() }
+    }
+
+    /** Delete all entries belonging to [householdId]. Called when a household is deleted. */
+    suspend fun deleteByHouseholdId(householdId: UUID) {
+        val entries = findByHouseholdId(householdId, fromDate = null, toDate = null)
+        coroutineScope { entries.map { async { delete(it.entryId) } }.awaitAll() }
     }
 
     private fun buildItem(entry: Entry): MutableMap<String, AttributeValue> {
@@ -225,7 +224,7 @@ class EntryRepository(
             type = TransactionType.fromStringOrUnsupported(item[TYPE_ATTRIBUTE]?.asS() ?: throw IllegalStateException("Missing type")),
             necessity = Necessity.fromString(item[NECESSITY_ATTRIBUTE]?.asS() ?: throw IllegalStateException("Missing necessity")),
             authorName = item[AUTHOR_NAME_ATTRIBUTE]?.asS() ?: throw IllegalStateException("Missing authorName"),
-            createdAt = Instant.ofEpochSecond(item[CREATED_AT_ATTRIBUTE]?.asN()?.toLong() ?: throw IllegalStateException("Missing createdAt"))
+            createdAt = Instant.ofEpochSecond(item[CREATED_AT_ATTRIBUTE]?.asN()?.toLongOrNull() ?: throw IllegalStateException("Missing or invalid createdAt"))
         )
     }
 }

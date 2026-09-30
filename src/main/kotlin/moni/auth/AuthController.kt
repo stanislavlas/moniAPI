@@ -1,15 +1,14 @@
 package moni.auth
 
 import kotlinx.coroutines.runBlocking
-import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.*
-import org.springframework.web.server.ResponseStatusException
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 import moni.common.getUserId
 import moni.common.successResponse
+import moni.config.AuthException
 import moni.models.Currency
 import moni.models.api.AuthUserResponse
 import moni.models.api.RegistrationPendingResponse
@@ -32,30 +31,32 @@ class AuthController(
 
     @PostMapping("/create")
     fun createAndGetJwt(@Valid @RequestBody createRequest: CreateRequest): RegistrationPendingResponse {
-        return authService.createUser(
-            currency = createRequest.currency,
-            email = createRequest.email,
-            name = createRequest.name,
-            password = createRequest.password,
-        )
+        return runBlocking {
+            authService.createUser(
+                currency = createRequest.currency,
+                email = createRequest.email,
+                name = createRequest.name,
+                password = createRequest.password,
+            )
+        }
     }
 
     @PostMapping("/verify")
-    fun verifyRegistration(@RequestBody request: VerifyRegistrationRequest): AuthUserResponse {
+    fun verifyRegistration(@Valid @RequestBody request: VerifyRegistrationRequest): AuthUserResponse {
         return runBlocking { authService.verifyRegistration(request.code) }
     }
 
     @PostMapping("/resend")
-    fun resendVerification(@RequestBody request: ResendVerificationRequest): Map<String, Boolean> {
+    fun resendVerification(@Valid @RequestBody request: ResendVerificationRequest): Map<String, Boolean> {
         runBlocking { authService.resendVerificationCode(request.email) }
         return successResponse()
     }
 
     @PostMapping("/refresh")
-    fun refreshToken(@RequestBody refreshRequest: RefreshRequest): RefreshResponse {
+    fun refreshToken(@Valid @RequestBody refreshRequest: RefreshRequest): RefreshResponse {
         val tokens = runBlocking {
             authService.refreshAccessToken(refreshRequest.refreshToken)
-        } ?: throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid or expired refresh token")
+        } ?: throw AuthException("Invalid or expired refresh token")
 
         return RefreshResponse(
             accessToken = tokens.first,
@@ -64,7 +65,7 @@ class AuthController(
     }
 
     @PostMapping("/logout")
-    fun logout(@RequestBody logoutRequest: LogoutRequest): Map<String, Boolean> {
+    fun logout(@Valid @RequestBody logoutRequest: LogoutRequest): Map<String, Boolean> {
         runBlocking {
             authService.logout(logoutRequest.refreshToken)
         }
@@ -74,7 +75,7 @@ class AuthController(
     @DeleteMapping("/account")
     fun deleteAccount(
         @RequestHeader("Authorization") authorization: String,
-        @RequestBody deleteRequest: DeleteAccountRequest
+        @Valid @RequestBody deleteRequest: DeleteAccountRequest
     ): Map<String, Boolean> {
         val userId = authorization.getUserId(jwtAuth)
 
@@ -88,7 +89,7 @@ class AuthController(
     @PutMapping("/password")
     fun changePassword(
         @RequestHeader("Authorization") authorization: String,
-        @RequestBody request: ChangePasswordRequest,
+        @Valid @RequestBody request: ChangePasswordRequest,
     ): Map<String, Boolean> {
         val userId = authorization.getUserId(jwtAuth)
 
@@ -100,13 +101,13 @@ class AuthController(
     }
 
     @PostMapping("/forgot-password")
-    fun forgotPassword(@RequestBody request: ForgotPasswordRequest): Map<String, Boolean> {
+    fun forgotPassword(@Valid @RequestBody request: ForgotPasswordRequest): Map<String, Boolean> {
         runBlocking { authService.forgotPassword(request.email) }
         return successResponse()
     }
 
     @PostMapping("/reset-password")
-    fun resetPassword(@RequestBody request: ResetPasswordRequest): Map<String, Boolean> {
+    fun resetPassword(@Valid @RequestBody request: ResetPasswordRequest): Map<String, Boolean> {
         runBlocking { authService.resetPassword(request.code, request.newPassword) }
         return successResponse()
     }
@@ -121,19 +122,19 @@ data class CreateRequest(
     val currency: Currency,
     @field:Email @field:NotBlank val email: String,
     @field:NotBlank val name: String,
-    @field:Size(min = 8, message = "Password must be at least 8 characters") val password: String,
+    @field:NotBlank @field:Size(min = 8, message = "Password must be at least 8 characters") val password: String,
 )
 
 data class VerifyRegistrationRequest(
-    val code: String,
+    @field:NotBlank val code: String,
 )
 
 data class ResendVerificationRequest(
-    val email: String,
+    @field:Email @field:NotBlank val email: String,
 )
 
 data class RefreshRequest(
-    val refreshToken: String,
+    @field:NotBlank val refreshToken: String,
 )
 
 data class RefreshResponse(
@@ -142,23 +143,23 @@ data class RefreshResponse(
 )
 
 data class LogoutRequest(
-    val refreshToken: String,
+    @field:NotBlank val refreshToken: String,
 )
 
 data class DeleteAccountRequest(
-    val password: String,
+    @field:NotBlank val password: String,
 )
 
 data class ChangePasswordRequest(
-    val currentPassword: String,
-    val newPassword: String,
+    @field:NotBlank val currentPassword: String,
+    @field:NotBlank @field:Size(min = 8, message = "Password must be at least 8 characters") val newPassword: String,
 )
 
 data class ForgotPasswordRequest(
-    val email: String,
+    @field:Email @field:NotBlank val email: String,
 )
 
 data class ResetPasswordRequest(
-    val code: String,
-    val newPassword: String,
+    @field:NotBlank val code: String,
+    @field:NotBlank @field:Size(min = 8, message = "Password must be at least 8 characters") val newPassword: String,
 )

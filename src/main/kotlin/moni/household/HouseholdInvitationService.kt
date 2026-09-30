@@ -18,18 +18,19 @@ class HouseholdInvitationService(
 ) {
     /** Owner sends an invitation to [invitedEmail]. */
     suspend fun sendInvitation(ownerUserId: UUID, invitedEmail: String): HouseholdInvitation {
+        val normEmail = invitedEmail.trim().lowercase()
         val owner = dataStoreClient.getUserById(ownerUserId)
         val household = householdRepository.findById(
             owner.householdId ?: throw IllegalArgumentException("You are not in a household")
         ) ?: throw IllegalArgumentException("Household not found")
         if (household.ownerId != ownerUserId) throw IllegalArgumentException("Only the owner can invite members")
-        if (household.members.any { it.email.equals(invitedEmail, ignoreCase = true) })
+        if (household.members.any { it.email.equals(normEmail, ignoreCase = true) })
             throw IllegalArgumentException("That user is already a member of this household")
 
-        dataStoreClient.getUserByEmail(invitedEmail.lowercase())
+        dataStoreClient.getUserByEmail(normEmail)
             ?: throw IllegalArgumentException("No account found for that email address")
 
-        val existing = invitationRepository.findByInvitedEmail(invitedEmail.lowercase())
+        val existing = invitationRepository.findByInvitedEmail(normEmail)
             .firstOrNull { it.householdId == household.householdId && it.status == InvitationStatus.PENDING }
         if (existing != null) throw IllegalArgumentException("A pending invitation already exists for that email")
 
@@ -39,7 +40,7 @@ class HouseholdInvitationService(
             householdName   = household.name,
             invitedByUserId = ownerUserId,
             invitedByName   = owner.name,
-            invitedEmail    = invitedEmail.lowercase(),
+            invitedEmail    = normEmail,
         )
         invitationRepository.save(invitation)
         return invitation
@@ -49,7 +50,7 @@ class HouseholdInvitationService(
     suspend fun getPendingInvitationsForUser(userId: UUID): List<HouseholdInvitation> {
         val user = dataStoreClient.getUserById(userId)
         val now = Instant.now()
-        return invitationRepository.findByInvitedEmail(user.email.lowercase())
+        return invitationRepository.findByInvitedEmail(user.email.trim().lowercase())
             .filter { it.status == InvitationStatus.PENDING && it.expiresAt.isAfter(now) }
     }
 
@@ -65,6 +66,9 @@ class HouseholdInvitationService(
     /** Invitee accepts: joins the household and marks invitation ACCEPTED. */
     suspend fun acceptInvitation(userId: UUID, invitationId: UUID): HouseholdInvitation {
         val user = dataStoreClient.getUserById(userId)
+        if (user.householdId != null) {
+            throw IllegalArgumentException("You are already a member of a household. Leave it first before accepting an invitation.")
+        }
         val invitation = requirePendingInvitation(invitationId, user.email)
         val household = householdRepository.findById(invitation.householdId)
             ?: throw IllegalArgumentException("Household no longer exists")
@@ -104,8 +108,10 @@ class HouseholdInvitationService(
     private suspend fun requirePendingInvitation(invitationId: UUID, userEmail: String): HouseholdInvitation {
         val invitation = invitationRepository.findById(invitationId)
             ?: throw NoSuchElementException("Invitation not found")
+        // Use the same 404 when the invitation belongs to someone else — this prevents
+        // an attacker from enumerating valid invitation UUIDs via differential responses.
         if (!invitation.invitedEmail.equals(userEmail, ignoreCase = true))
-            throw IllegalArgumentException("This invitation was not sent to you")
+            throw NoSuchElementException("Invitation not found")
         if (invitation.status != InvitationStatus.PENDING)
             throw IllegalArgumentException("Invitation is no longer pending (status: ${invitation.status})")
         if (invitation.expiresAt.isBefore(Instant.now()))

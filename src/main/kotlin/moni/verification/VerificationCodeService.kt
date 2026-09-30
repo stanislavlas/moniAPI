@@ -37,15 +37,26 @@ class VerificationCodeService(
             expiresAt = Instant.now().plusSeconds(CODE_EXPIRY_SECONDS),
         )
         repository.save(verificationCode)
-        logger.info("VERIFICATION CODE for {} ({}): {}", email, type, code)
+        logger.info("Verification code generated for userId={} type={}", userId, type)
         return verificationCode
     }
 
     suspend fun validate(code: String, expectedType: VerificationType): VerificationCode {
         val stored = repository.findByCode(code)
-            ?: throw IllegalArgumentException("Invalid verification code")
 
-        if (stored.type != expectedType) {
+        // Penalise bad guesses before throwing so enumeration attacks are rate-limited.
+        // When a code exists but is the wrong type, increment the failed-attempt counter
+        // so cross-type probes are counted. We do NOT penalise a different type's code —
+        // recordFailedAttempt only targets the stored code of the given user, regardless
+        // of which type it belongs to. The actual guard lives in recordFailedAttempt itself.
+        // NOTE: when stored == null (code doesn't exist at all) we cannot identify the user
+        // and therefore cannot apply a per-user throttle. IP-level rate limiting at the
+        // infrastructure layer (API Gateway / load balancer) is required to protect this path.
+        if (stored == null || stored.type != expectedType) {
+            // stored.type != expectedType is the only reachable sub-case when stored != null,
+            // because findByCode is an exact-key lookup — a wrong code returns null, not a
+            // wrong-typed record.
+            if (stored != null) recordFailedAttempt(stored.userId)
             throw IllegalArgumentException("Invalid verification code")
         }
 
@@ -54,18 +65,23 @@ class VerificationCodeService(
             throw IllegalArgumentException("Verification code has expired")
         }
 
-        // Brute-force guard: track wrong guesses and lock after MAX_FAILED_ATTEMPTS
-        if (stored.code != code) {
-            val updated = stored.copy(failedAttempts = stored.failedAttempts + 1)
-            if (updated.failedAttempts >= MAX_FAILED_ATTEMPTS) {
-                repository.deleteByCode(code)
-                throw IllegalArgumentException("Too many failed attempts. Please request a new code.")
-            }
-            repository.save(updated)
-            throw IllegalArgumentException("Invalid verification code")
-        }
-
         return stored
+    }
+
+    /**
+     * Increment the failed-attempt counter for the code currently held by [userId].
+     * Called when a code is found but is the wrong type (the only reachable bad-guess
+     * scenario given that findByCode is an exact-key lookup).
+     * Deletes the code and throws if [MAX_FAILED_ATTEMPTS] is reached.
+     */
+    suspend fun recordFailedAttempt(userId: UUID) {
+        val stored = repository.findByUserId(userId) ?: return
+        val updated = stored.copy(failedAttempts = stored.failedAttempts + 1)
+        if (updated.failedAttempts >= MAX_FAILED_ATTEMPTS) {
+            repository.deleteByCode(stored.code)
+            throw IllegalArgumentException("Too many failed attempts. Please request a new code.")
+        }
+        repository.save(updated)
     }
 
     suspend fun consume(code: String) {
@@ -118,7 +134,7 @@ class VerificationCodeService(
             resendCount = existingCode.resendCount + 1,
         )
         repository.save(newCode)
-        logger.info("VERIFICATION CODE for {} ({}): {}", email, existingCode.type, newCodeStr)
+        logger.info("Verification code resent for userId={} type={}", existingCode.userId, existingCode.type)
         return newCode
     }
 }

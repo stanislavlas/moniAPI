@@ -18,9 +18,9 @@ data class Entry(
     val type: TransactionType,
     val necessity: Necessity,
     val authorName: String,
-    // Set explicitly at persistence time in EntryService to avoid clock drift
-    // between object construction and the actual DynamoDB write.
-    val createdAt: Instant = Instant.now()
+    // Must be set explicitly at persistence time — no default to prevent accidental clock drift
+    // between object construction and the DynamoDB write. Always pass Instant.now() at the call site.
+    val createdAt: Instant,
 )
 
 enum class Necessity {

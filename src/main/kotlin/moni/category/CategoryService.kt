@@ -30,7 +30,8 @@ class CategoryService(
     suspend fun assignToHousehold(userId: UUID, householdId: UUID) {
         categoryRepository.findByUserId(userId).forEach { cat ->
             // Save under the household key first; only delete personal record on success.
-            categoryRepository.save(cat.copy(householdId = householdId))
+            // userId = null because the category is now household-owned, not personal.
+            categoryRepository.save(cat.copy(householdId = householdId), userId = null)
         }
         // Remove all personal records now that they have been migrated.
         // Done as a second pass so a partial failure on the saves above doesn't leave
@@ -82,6 +83,8 @@ class CategoryService(
             ?: throw NoSuchElementException("Category not found")
         if (existing.isDefault) throw IllegalArgumentException("Cannot modify a default category")
 
+        if (name != null && name.isBlank()) throw IllegalArgumentException("name must not be blank")
+
         assertCategoryOwnership(existing, userId)
 
         val updated = existing.copy(
@@ -118,7 +121,16 @@ class CategoryService(
      * Throws [ForbiddenException] on violation.
      */
     private suspend fun assertCategoryOwnership(category: Category, userId: UUID) {
-        val ownerKey = category.ownerKey ?: return // global categories have no ownerKey — skip
+        val ownerKey = category.ownerKey
+        if (ownerKey == null) {
+            // Global categories have no ownerKey — they are protected by the isDefault check
+            // in updateCategory/deleteCategory before this method is called.
+            // A non-default category with a null ownerKey is a data integrity error.
+            if (!category.isDefault) {
+                throw IllegalStateException("Category ${category.categoryId} has no ownerKey and is not a default — refusing modification")
+            }
+            return
+        }
         if (!ownerKey.startsWith("household:")) {
             if (ownerKey != "user:$userId") throw ForbiddenException("Not authorized to modify this category")
         } else if (category.householdId != null) {

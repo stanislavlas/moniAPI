@@ -29,6 +29,15 @@ class JwtRequestFilter(
     private val jwtAuth: JwtAuth,
     private val userService: UserService,
 ): OncePerRequestFilter() {
+
+    private fun HttpServletResponse.rejectWith(status: Int, message: String) {
+        this.status = status
+        contentType = "application/json"
+        // Escape backslashes and quotes to prevent JSON injection if message ever changes
+        val escaped = message.replace("\\", "\\\\").replace("\"", "\\\"")
+        writer.write("{\"message\":\"$escaped\"}")
+    }
+
     override fun doFilterInternal(
         request: HttpServletRequest,
         response: HttpServletResponse,
@@ -44,29 +53,19 @@ class JwtRequestFilter(
             userId = try {
                 jwtAuth.getUserIdFromJWT(jwt = jwt)
             } catch (e: ExpiredJwtException) {
-                response.status = HttpServletResponse.SC_UNAUTHORIZED
-                response.contentType = "application/json"
-                response.writer.write("{\"message\":\"JWT token has expired\"}")
+                response.rejectWith(HttpServletResponse.SC_UNAUTHORIZED, "JWT token has expired")
                 return
             } catch (e: MalformedJwtException) {
-                response.status = HttpServletResponse.SC_UNAUTHORIZED
-                response.contentType = "application/json"
-                response.writer.write("{\"message\":\"Malformed JWT token\"}")
+                response.rejectWith(HttpServletResponse.SC_UNAUTHORIZED, "Malformed JWT token")
                 return
             } catch (e: UnsupportedJwtException) {
-                response.status = HttpServletResponse.SC_UNAUTHORIZED
-                response.contentType = "application/json"
-                response.writer.write("{\"message\":\"Unsupported JWT token\"}")
+                response.rejectWith(HttpServletResponse.SC_UNAUTHORIZED, "Unsupported JWT token")
                 return
             } catch (e: SignatureException) {
-                response.status = HttpServletResponse.SC_UNAUTHORIZED
-                response.contentType = "application/json"
-                response.writer.write("{\"message\":\"Invalid JWT signature\"}")
+                response.rejectWith(HttpServletResponse.SC_UNAUTHORIZED, "Invalid JWT signature")
                 return
             } catch (e: IllegalArgumentException) {
-                response.status = HttpServletResponse.SC_UNAUTHORIZED
-                response.contentType = "application/json"
-                response.writer.write("{\"message\":\"Invalid JWT token\"}")
+                response.rejectWith(HttpServletResponse.SC_UNAUTHORIZED, "Invalid JWT token")
                 return
             }
         }
@@ -74,18 +73,14 @@ class JwtRequestFilter(
         if (userId != null && SecurityContextHolder.getContext().authentication == null) {
             val userDetails = userService.getUser(userId = userId) ?: run {
                 // User deleted but token still valid — reject with 401
-                response.status = HttpServletResponse.SC_UNAUTHORIZED
-                response.contentType = "application/json"
-                response.writer.write("{\"message\":\"User not found\"}")
+                response.rejectWith(HttpServletResponse.SC_UNAUTHORIZED, "User not found")
                 return
             }
 
             if (jwtAuth.validateJWT(jwt!!, userDetails.userId)) {
                 // Block unverified users from all protected routes
                 if (!userDetails.emailVerified && request.requestURI !in EMAIL_VERIFICATION_EXEMPT_PATHS) {
-                    response.status = HttpServletResponse.SC_FORBIDDEN
-                    response.contentType = "application/json"
-                    response.writer.write("{\"message\":\"EMAIL_NOT_VERIFIED\"}")
+                    response.rejectWith(HttpServletResponse.SC_FORBIDDEN, "EMAIL_NOT_VERIFIED")
                     return
                 }
 

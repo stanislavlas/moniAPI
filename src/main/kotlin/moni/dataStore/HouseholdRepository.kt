@@ -60,7 +60,7 @@ class HouseholdRepository(
             name        = item[NAME_ATTRIBUTE]?.asS()  ?: error("Missing name"),
             ownerId     = UUID.fromString(item[OWNER_ID_ATTRIBUTE]?.asS() ?: error("Missing ownerId")),
             members     = members,
-            createdAt   = Instant.ofEpochSecond(item[CREATED_AT_ATTRIBUTE]?.asN()?.toLong() ?: error("Missing createdAt")),
+            createdAt   = Instant.ofEpochSecond(item[CREATED_AT_ATTRIBUTE]?.asN()?.toLongOrNull() ?: error("Missing or invalid createdAt")),
         )
     }
 }

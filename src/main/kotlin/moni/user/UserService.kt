@@ -35,13 +35,17 @@ class UserService(
         notificationTime: String? = null,
     ): User {
         if (currency != null && !currencyConversionService.isValidCurrency(currency)) {
-            throw IllegalArgumentException("Unknown currency code: $currency")
+            throw IllegalArgumentException("Unknown currency code")
+        }
+
+        if (name != null && name.isBlank()) {
+            throw IllegalArgumentException("name must not be blank")
         }
 
         if (notificationFrequency != null) {
             val valid = setOf("daily", "weekly", "monthly", "custom")
             if (notificationFrequency !in valid) {
-                throw IllegalArgumentException("Invalid notificationFrequency: $notificationFrequency")
+                throw IllegalArgumentException("Invalid notificationFrequency")
             }
         }
 
@@ -61,22 +65,22 @@ class UserService(
                 throw IllegalArgumentException("Incorrect password")
             }
             val normalizedEmail = email.trim().lowercase()
+            // NOTE: There is a TOCTOU window between this uniqueness check and the updateUser
+            // write below. A concurrent email change by another user to the same address could
+            // pass this check and result in two accounts sharing an email in the GSI. A DynamoDB
+            // conditional write with a ConditionExpression would eliminate this, but is not
+            // supported on GSI attributes natively. Risk is accepted as very low for this app.
             val existing = runBlocking { dataStoreClient.getUserByEmail(normalizedEmail) }
             if (existing != null && existing.userId != userId) {
                 throw IllegalArgumentException("Email address is already in use")
             }
-            // Build the updated user from the already-fetched record to avoid a second DB read
-            val updated = user.copy(
-                name                   = name                   ?: user.name,
-                currency               = currency               ?: user.currency,
-                email                  = normalizedEmail,
-                notificationsEnabled   = notificationsEnabled   ?: user.notificationsEnabled,
-                notificationFrequency  = notificationFrequency  ?: user.notificationFrequency,
-                notificationCustomDays = notificationCustomDays ?: user.notificationCustomDays,
-                notificationTime       = notificationTime       ?: user.notificationTime,
-            )
-            runBlocking { dataStoreClient.putUser(updated) }
-            return updated
+            // Delegate the copy-merge-put to updateUser so all fields go through one code path
+            return runBlocking {
+                dataStoreClient.updateUser(
+                    userId, name, currency, normalizedEmail,
+                    notificationsEnabled, notificationFrequency, notificationCustomDays, notificationTime,
+                )
+            }
         }
 
         return runBlocking {

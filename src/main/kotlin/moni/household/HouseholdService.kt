@@ -1,8 +1,12 @@
 package moni.household
 
 import org.springframework.stereotype.Service
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import moni.category.CategoryService
 import moni.config.ForbiddenException
+import moni.dataStore.EntryRepository
 import moni.dataStore.HouseholdInvitationRepository
 import moni.dataStore.HouseholdRepository
 import moni.dataStore.IDataStoreClient
@@ -17,6 +21,7 @@ class HouseholdService(
     private val dataStoreClient: IDataStoreClient,
     private val categoryService: CategoryService,
     private val invitationRepository: HouseholdInvitationRepository,
+    private val entryRepository: EntryRepository,
 ) {
 
     suspend fun getHouseholdByUserId(userId: UUID): Household? {
@@ -24,6 +29,10 @@ class HouseholdService(
         val householdId = user.householdId ?: return null
         return householdRepository.findById(householdId)
     }
+
+    /** Direct lookup by householdId — avoids fetching the User record when the ID is already known. */
+    suspend fun getHouseholdById(householdId: UUID): Household? =
+        householdRepository.findById(householdId)
 
     suspend fun createHousehold(userId: UUID, name: String): Household {
         val user = dataStoreClient.getUserById(userId)
@@ -53,9 +62,12 @@ class HouseholdService(
         val household = householdRepository.findById(householdId) ?: throw NoSuchElementException("Household not found")
         if (household.ownerId != userId) throw ForbiddenException("Only the owner can delete the household")
 
-        household.members.forEach { member ->
-            categoryService.restoreToUser(member.userId, householdId)
-            val memberUser = dataStoreClient.getUserById(member.userId)
+        // Fetch all member users in parallel to avoid N+1 sequential DynamoDB reads
+        val memberUsers = coroutineScope {
+            household.members.map { member -> async { dataStoreClient.getUserById(member.userId) } }.awaitAll()
+        }
+        memberUsers.forEach { memberUser ->
+            categoryService.restoreToUser(memberUser.userId, householdId)
             dataStoreClient.putUser(memberUser.copy(householdId = null, householdRole = null))
         }
 
@@ -63,6 +75,9 @@ class HouseholdService(
         invitationRepository.findByHouseholdId(householdId).forEach { invitation ->
             invitationRepository.delete(invitation.invitationId)
         }
+
+        // Delete all entries belonging to the household
+        entryRepository.deleteByHouseholdId(householdId)
 
         householdRepository.delete(householdId)
     }

@@ -18,25 +18,30 @@ class VerificationCodeRepository(
     private val objectMapper: ObjectMapper,
 ) {
     suspend fun save(verificationCode: VerificationCode) {
-        // Primary record — keyed by code
-        val request = PutItemRequest {
-            tableName = VERIFICATION_TABLE
-            item = mapOf(
-                CODE_ATTRIBUTE to AttributeValue.S(verificationCode.code),
-                DATA_ATTRIBUTE to AttributeValue.S(objectMapper.writeValueAsString(verificationCode)),
+        val data = objectMapper.writeValueAsString(verificationCode)
+        // Write both the primary (code) and reverse-lookup (user:<userId>) records atomically.
+        dynamoClient.transactWriteItems(TransactWriteItemsRequest {
+            transactItems = listOf(
+                TransactWriteItem {
+                    put = Put {
+                        tableName = VERIFICATION_TABLE
+                        item = mapOf(
+                            CODE_ATTRIBUTE to AttributeValue.S(verificationCode.code),
+                            DATA_ATTRIBUTE to AttributeValue.S(data),
+                        )
+                    }
+                },
+                TransactWriteItem {
+                    put = Put {
+                        tableName = VERIFICATION_TABLE
+                        item = mapOf(
+                            CODE_ATTRIBUTE to AttributeValue.S("user:${verificationCode.userId}"),
+                            DATA_ATTRIBUTE to AttributeValue.S(data),
+                        )
+                    }
+                },
             )
-        }
-        dynamoClient.putItem(request)
-
-        // Reverse-lookup record — keyed by "user:<userId>" so findByUserId avoids a full scan
-        val reverseRequest = PutItemRequest {
-            tableName = VERIFICATION_TABLE
-            item = mapOf(
-                CODE_ATTRIBUTE to AttributeValue.S("user:${verificationCode.userId}"),
-                DATA_ATTRIBUTE to AttributeValue.S(objectMapper.writeValueAsString(verificationCode)),
-            )
-        }
-        dynamoClient.putItem(reverseRequest)
+        })
     }
 
     suspend fun findByUserId(userId: UUID): VerificationCode? {
@@ -62,30 +67,42 @@ class VerificationCodeRepository(
     }
 
     suspend fun deleteByCode(code: String) {
-        // Find the record first so we can clean up the reverse-lookup key too
-        val existing = findByCode(code)
+        // Find the primary record to get the userId for the reverse-lookup key.
+        val existing = findByCode(code) ?: return
 
-        dynamoClient.deleteItem(DeleteItemRequest {
-            tableName = VERIFICATION_TABLE
-            key = mapOf(CODE_ATTRIBUTE to AttributeValue.S(code))
+        // Delete both records atomically so neither can be left as a stale orphan.
+        dynamoClient.transactWriteItems(TransactWriteItemsRequest {
+            transactItems = listOf(
+                TransactWriteItem {
+                    delete = Delete {
+                        tableName = VERIFICATION_TABLE
+                        key = mapOf(CODE_ATTRIBUTE to AttributeValue.S(code))
+                    }
+                },
+                TransactWriteItem {
+                    delete = Delete {
+                        tableName = VERIFICATION_TABLE
+                        key = mapOf(CODE_ATTRIBUTE to AttributeValue.S("user:${existing.userId}"))
+                    }
+                },
+            )
         })
-
-        // Clean up the reverse-lookup record keyed by "user:<userId>"
-        existing?.let {
-            dynamoClient.deleteItem(DeleteItemRequest {
-                tableName = VERIFICATION_TABLE
-                key = mapOf(CODE_ATTRIBUTE to AttributeValue.S("user:${it.userId}"))
-            })
-        }
     }
 
     suspend fun deleteAllForUser(userId: UUID) {
-        // Find the code via the reverse-lookup record (O(1)) and delete both DynamoDB
-        // records in one call. deleteByCode removes the primary code record AND the
-        // "user:<userId>" reverse-lookup record, so no second DeleteItem is needed.
+        // Find the code via the reverse-lookup record (O(1)) then delete both records atomically.
         val record = findByUserId(userId)
         if (record != null) {
             deleteByCode(record.code)
+        } else {
+            // Best-effort cleanup of a stale reverse-lookup record that could exist if a
+            // previous transactWriteItems partially succeeded and left only the lookup record.
+            try {
+                dynamoClient.deleteItem(DeleteItemRequest {
+                    tableName = VERIFICATION_TABLE
+                    key = mapOf(CODE_ATTRIBUTE to AttributeValue.S("user:$userId"))
+                })
+            } catch (_: Exception) { /* best effort — not critical */ }
         }
     }
 }

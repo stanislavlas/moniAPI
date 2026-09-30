@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Test
 import moni.common.UserResolver
 import moni.currency.CurrencyConversionService
 import moni.dataStore.EntryRepository
-import moni.dataStore.HouseholdRepository
 import moni.dataStore.IDataStoreClient
 import moni.household.HouseholdService
 import moni.models.Amount
@@ -25,7 +24,6 @@ import java.util.*
 class EntryServiceTest {
 
     private val entryRepository           = mockk<EntryRepository>()
-    private val householdRepository       = mockk<HouseholdRepository>()
     private val dataStoreClient           = mockk<IDataStoreClient>()
     private val currencyConversionService = mockk<CurrencyConversionService>()
     private val householdService          = mockk<HouseholdService>()
@@ -33,7 +31,6 @@ class EntryServiceTest {
 
     private val service = EntryService(
         entryRepository,
-        householdRepository,
         dataStoreClient,
         currencyConversionService,
         householdService,

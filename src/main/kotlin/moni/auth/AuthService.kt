@@ -1,6 +1,5 @@
 package moni.auth
 
-import kotlinx.coroutines.runBlocking
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import moni.category.CategoryService
@@ -58,22 +57,22 @@ class AuthService(
         )
     }
 
-    fun createUser(
+    suspend fun createUser(
         currency: Currency,
         email: String,
         name: String,
         password: String,
     ): RegistrationPendingResponse {
         if (!currencyConversionService.isValidCurrency(currency)) {
-            throw IllegalArgumentException("Unknown currency code: $currency")
+            throw IllegalArgumentException("Unknown currency code")
         }
 
         val normEmail = email.trim().lowercase()
-        val user = runBlocking { dataStore.getUserByEmail(normEmail) }
+        val user = dataStore.getUserByEmail(normEmail)
 
         if (user != null) {
             if (user.emailVerified) {
-                throw IllegalArgumentException("User with email $normEmail already exists")
+                throw IllegalArgumentException("An account with that email address already exists")
             }
             // Unverified user — clean up stale record and allow re-registration.
             // NOTE: There is a potential TOCTOU race here: two concurrent registrations for the
@@ -82,10 +81,8 @@ class AuthService(
             // two user records being written for the same email, which the GSI unique constraint
             // (if configured) would catch. For now this window is accepted as very low probability
             // in a personal-finance app with low concurrent traffic.
-            runBlocking {
-                verificationCodeService.deleteAllForUser(user.userId)
-                dataStore.deleteUser(user.userId)
-            }
+            verificationCodeService.deleteAllForUser(user.userId)
+            dataStore.deleteUser(user.userId)
         }
 
         val newUser = User(
@@ -97,17 +94,15 @@ class AuthService(
             emailVerified = false,
         )
 
-        runBlocking { dataStore.putUser(user = newUser) }
+        dataStore.putUser(user = newUser)
 
         // Send verification code to the registered email
-        runBlocking {
-            verificationCodeService.generateAndSend(
-                userId = newUser.userId,
-                type = VerificationType.REGISTRATION,
-                email = normEmail,
-                name = name,
-            )
-        }
+        verificationCodeService.generateAndSend(
+            userId = newUser.userId,
+            type = VerificationType.REGISTRATION,
+            email = normEmail,
+            name = name,
+        )
 
         return RegistrationPendingResponse(
             userId = newUser.userId,
@@ -118,7 +113,21 @@ class AuthService(
     suspend fun verifyRegistration(code: String): AuthUserResponse {
         val verificationCode = verificationCodeService.validate(code, VerificationType.REGISTRATION)
 
-        val user = dataStore.getUserById(verificationCode.userId)
+        val user = try {
+            dataStore.getUserById(verificationCode.userId)
+        } catch (_: NoSuchElementException) {
+            // User deleted between code generation and verification — treat as invalid code
+            throw IllegalArgumentException("Invalid verification code")
+        }
+
+        // Guard: if already verified, consume the stale code so it can't be reused,
+        // then reject. This prevents an attacker who sniffed the OTP from re-issuing
+        // tokens after the legitimate user has already verified.
+        if (user.emailVerified) {
+            verificationCodeService.consume(code)
+            throw IllegalArgumentException("Email is already verified")
+        }
+
         val verifiedUser = user.copy(emailVerified = true)
 
         // 1. Persist the verified user first. If this throws, nothing else runs and the
@@ -192,11 +201,11 @@ class AuthService(
         //    the household's members list and the owner pointer remain consistent.
         val householdId = user.householdId
         if (householdId != null) {
-            val household = householdService.getHouseholdByUserId(userId)
+            // Use the householdId we already have on the user — avoids a second getUserById
+            // call that getHouseholdByUserId would trigger internally.
+            val household = householdService.getHouseholdById(householdId)
             if (household != null) {
                 if (household.ownerId == userId) {
-                    // Owner is deleting their account — delete the whole household so
-                    // remaining members aren't left orphaned.
                     householdService.deleteHousehold(householdId, userId)
                 } else {
                     householdService.leaveHousehold(householdId, userId)
@@ -204,8 +213,8 @@ class AuthService(
             }
         }
 
-        // 2. Delete personal entries (household entries authored by this user are left intact
-        //    since other household members still need them).
+        // 2. Delete personal entries. Household entries were already deleted inside
+        //    deleteHousehold() above when the user was the owner.
         entryRepository.deleteByUserId(userId)
 
         // 3. Delete personal categories (household categories survive for other members).

@@ -9,7 +9,8 @@ import moni.auth.JwtAuth
 import moni.common.getUserId
 import moni.common.successResponse
 import moni.dataStore.IDataStoreClient
-import moni.models.internal.Household
+import moni.models.api.HouseholdResponse
+import moni.models.api.toApi
 import java.util.*
 
 @RestController
@@ -22,33 +23,33 @@ class HouseholdController(
     @GetMapping
     fun getHousehold(
         @RequestHeader("Authorization") authorization: String
-    ): ResponseEntity<Household> {
+    ): ResponseEntity<HouseholdResponse> {
         val userId = authorization.getUserId(jwtAuth)
         val household = runBlocking { householdService.getHouseholdByUserId(userId) }
-        return if (household != null) ResponseEntity.ok(household)
+        return if (household != null) ResponseEntity.ok(household.toApi())
         else ResponseEntity.noContent().build()
     }
 
     @PostMapping
     fun createHousehold(
         @RequestHeader("Authorization") authorization: String,
-        @RequestBody request: CreateHouseholdRequest
-    ): Household {
+        @Valid @RequestBody request: CreateHouseholdRequest
+    ): HouseholdResponse {
         val userId = authorization.getUserId(jwtAuth)
         return runBlocking {
-            householdService.createHousehold(userId = userId, name = request.name)
+            householdService.createHousehold(userId = userId, name = request.name).toApi()
         }
     }
 
     @PutMapping
     fun renameHousehold(
         @RequestHeader("Authorization") authorization: String,
-        @RequestBody request: RenameHouseholdRequest
-    ): Household {
+        @Valid @RequestBody request: RenameHouseholdRequest
+    ): HouseholdResponse {
         val userId = authorization.getUserId(jwtAuth)
         return runBlocking {
             val householdId = requireHouseholdId(userId)
-            householdService.renameHousehold(householdId = householdId, userId = userId, newName = request.name)
+            householdService.renameHousehold(householdId = householdId, userId = userId, newName = request.name).toApi()
         }
     }
 
@@ -68,15 +69,18 @@ class HouseholdController(
     fun removeMember(
         @RequestHeader("Authorization") authorization: String,
         @PathVariable memberId: String
-    ): Household {
+    ): HouseholdResponse {
         val ownerId = authorization.getUserId(jwtAuth)
+        val memberUUID = try { UUID.fromString(memberId) } catch (_: IllegalArgumentException) {
+            throw IllegalArgumentException("Invalid member ID format")
+        }
         return runBlocking {
             val householdId = requireHouseholdId(ownerId)
             householdService.removeMember(
                 householdId  = householdId,
                 ownerId      = ownerId,
-                memberUserId = UUID.fromString(memberId),
-            )
+                memberUserId = memberUUID,
+            ).toApi()
         }
     }
 

@@ -2,9 +2,9 @@ package moni.entry
 
 import org.springframework.stereotype.Service
 import moni.common.UserResolver
+import moni.config.ForbiddenException
 import moni.currency.CurrencyConversionService
 import moni.dataStore.EntryRepository
-import moni.dataStore.HouseholdRepository
 import moni.dataStore.IDataStoreClient
 import moni.household.HouseholdService
 import moni.models.Amount
@@ -18,7 +18,6 @@ import java.util.*
 @Service
 class EntryService(
     private val entryRepository: EntryRepository,
-    private val householdRepository: HouseholdRepository,
     private val dataStoreClient: IDataStoreClient,
     private val currencyConversionService: CurrencyConversionService,
     private val householdService: HouseholdService,
@@ -84,15 +83,18 @@ class EntryService(
         name: String,
         note: String,
         type: TransactionType,
-        necessity: Necessity
+        necessity: Necessity,
+        authorName: String,
     ): Entry {
-        val user = dataStoreClient.getUserById(userId)
 
         if (!currencyConversionService.isValidCurrency(amount.currency)) {
-            throw IllegalArgumentException("Unknown currency code: ${amount.currency}")
+            throw IllegalArgumentException("Unknown currency code")
         }
 
-        // Necessity is only meaningful for EXPENSE entries; enforce a neutral value otherwise.
+        // Necessity is only meaningful for EXPENSE entries.
+        // For INCOME and INVESTMENT entries it is stored as NECESSARY so the field is never
+        // null at the DB layer, but callers must filter on type == EXPENSE before using it.
+        // The dashboard aggregation already does this — see DashboardService.aggregateEntries.
         val resolvedNecessity = if (type == TransactionType.EXPENSE) necessity else Necessity.NECESSARY
 
         // If householdId provided, verify user is member
@@ -111,7 +113,7 @@ class EntryService(
             note = note,
             type = type,
             necessity = resolvedNecessity,
-            authorName = user.name,
+            authorName = authorName,
             createdAt = Instant.now(),  // captured here, immediately before save
         )
 
@@ -119,13 +121,8 @@ class EntryService(
         return entry
     }
 
-    /** Returns true when [userId] is allowed to edit/delete [entry]. */
-    private suspend fun canModifyEntry(entry: Entry, userId: UUID): Boolean =
-        if (entry.householdId != null)
-            householdRepository.findById(entry.householdId)?.let {
-                it.ownerId == userId || entry.userId == userId
-            } ?: false
-        else entry.userId == userId
+    /** Returns true when [userId] is allowed to edit/delete [entry]. Only the entry author can modify their own entries. */
+    private fun canModifyEntry(entry: Entry, userId: UUID): Boolean = entry.userId == userId
 
     suspend fun updateEntry(
         entryId: UUID,
@@ -141,7 +138,15 @@ class EntryService(
             ?: throw NoSuchElementException("Entry not found")
 
         if (!canModifyEntry(existing, userId)) {
-            throw moni.config.ForbiddenException("Not authorized to update this entry")
+            throw ForbiddenException("Not authorized to update this entry")
+        }
+
+        if (amount != null && !currencyConversionService.isValidCurrency(amount.currency)) {
+            throw IllegalArgumentException("Unknown currency code")
+        }
+
+        if (name != null && name.isBlank()) {
+            throw IllegalArgumentException("name must not be blank")
         }
 
         val updated = existing.copy(
@@ -163,7 +168,7 @@ class EntryService(
             ?: throw NoSuchElementException("Entry not found")
 
         if (!canModifyEntry(entry, userId)) {
-            throw moni.config.ForbiddenException("Not authorized to delete this entry")
+            throw ForbiddenException("Not authorized to delete this entry")
         }
 
         entryRepository.delete(entryId)

@@ -3,6 +3,9 @@ package moni.dataStore
 import aws.sdk.kotlin.services.dynamodb.DynamoDbClient
 import aws.sdk.kotlin.services.dynamodb.model.*
 import com.fasterxml.jackson.databind.ObjectMapper
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import org.springframework.stereotype.Repository
 import moni.models.internal.RefreshToken
 import java.time.Instant
@@ -66,9 +69,10 @@ class RefreshTokenRepository(
             expressionAttributeValues = mapOf(":userId" to AttributeValue.S(userId.toString()))
         }
 
-        dynamoClient.query(queryRequest).items?.forEach { item ->
-            item[TOKEN_ID_ATTRIBUTE]?.asS()?.let { deleteTokenById(it) }
-        }
+        val tokenIds = dynamoClient.query(queryRequest).items
+            ?.mapNotNull { it[TOKEN_ID_ATTRIBUTE]?.asS() }
+            ?: return
+        coroutineScope { tokenIds.map { async { deleteTokenById(it) } }.awaitAll() }
     }
 
     suspend fun deleteExpired() {
@@ -96,9 +100,9 @@ class RefreshTokenRepository(
             tokenId     = UUID.fromString(item[TOKEN_ID_ATTRIBUTE]?.asS()     ?: throw IllegalStateException("Missing tokenId")),
             userId      = UUID.fromString(item[USER_ID_ATTRIBUTE]?.asS()      ?: throw IllegalStateException("Missing userId")),
             tokenHash   = item[TOKEN_HASH_ATTRIBUTE]?.asS()                   ?: throw IllegalStateException("Missing tokenHash"),
-            tokenPrefix = item[TOKEN_PREFIX_ATTRIBUTE]?.asS()                 ?: "",   // "" for rows written before this change
-            expiresAt   = Instant.ofEpochSecond(item[EXPIRES_AT_ATTRIBUTE]?.asN()?.toLong() ?: throw IllegalStateException("Missing expiresAt")),
-            createdAt   = Instant.ofEpochSecond(item[CREATED_AT_ATTRIBUTE]?.asN()?.toLong() ?: throw IllegalStateException("Missing createdAt")),
+            tokenPrefix = item[TOKEN_PREFIX_ATTRIBUTE]?.asS()                   ?: throw IllegalStateException("Missing tokenPrefix"),
+            expiresAt   = Instant.ofEpochSecond(item[EXPIRES_AT_ATTRIBUTE]?.asN()?.toLongOrNull() ?: throw IllegalStateException("Missing or invalid expiresAt")),
+            createdAt   = Instant.ofEpochSecond(item[CREATED_AT_ATTRIBUTE]?.asN()?.toLongOrNull() ?: throw IllegalStateException("Missing or invalid createdAt")),
             deviceInfo  = item[DEVICE_INFO_ATTRIBUTE]?.asS()
         )
     }

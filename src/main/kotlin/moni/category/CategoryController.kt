@@ -2,13 +2,16 @@ package moni.category
 
 import kotlinx.coroutines.runBlocking
 import org.springframework.web.bind.annotation.*
+import jakarta.validation.Valid
+import jakarta.validation.constraints.NotBlank
 import moni.auth.JwtAuth
 import moni.common.getUser
 import moni.common.getUserId
 import moni.common.successResponse
 import moni.dataStore.IDataStoreClient
 import moni.models.TransactionType
-import moni.models.internal.Category
+import moni.models.api.CategoryResponse
+import moni.models.api.toApi
 import java.util.*
 
 @RestController
@@ -21,18 +24,18 @@ class CategoryController(
     @GetMapping
     fun getCategories(
         @RequestHeader("Authorization") authorization: String,
-    ): List<Category> {
+    ): List<CategoryResponse> {
         return runBlocking {
             val user = authorization.getUser(jwtAuth, dataStoreClient)
-            categoryService.getCategories(user.userId, user.householdId)
+            categoryService.getCategories(user.userId, user.householdId).map { it.toApi() }
         }
     }
 
     @PostMapping
     fun createCategory(
         @RequestHeader("Authorization") authorization: String,
-        @RequestBody request: CreateCategoryRequest
-    ): Category {
+        @Valid @RequestBody request: CreateCategoryRequest
+    ): CategoryResponse {
         return runBlocking {
             // Auto-scope to household if the user is currently in one
             val user = authorization.getUser(jwtAuth, dataStoreClient)
@@ -43,7 +46,7 @@ class CategoryController(
                 emoji       = request.resolvedEmoji,
                 color       = request.resolvedColor,
                 type        = request.type,
-            )
+            ).toApi()
         }
     }
 
@@ -51,17 +54,20 @@ class CategoryController(
     fun updateCategory(
         @RequestHeader("Authorization") authorization: String,
         @PathVariable id: String,
-        @RequestBody request: UpdateCategoryRequest
-    ): Category {
+        @Valid @RequestBody request: UpdateCategoryRequest
+    ): CategoryResponse {
         val userId = authorization.getUserId(jwtAuth)
+        val categoryUUID = try { UUID.fromString(id) } catch (_: IllegalArgumentException) {
+            throw IllegalArgumentException("Invalid category ID format")
+        }
         return runBlocking {
             categoryService.updateCategory(
-                categoryId = UUID.fromString(id),
+                categoryId = categoryUUID,
                 userId     = userId,
                 name       = request.name,
                 emoji      = request.emoji,
                 color      = request.color,
-            )
+            ).toApi()
         }
     }
 
@@ -71,9 +77,12 @@ class CategoryController(
         @PathVariable id: String
     ): Map<String, Boolean> {
         val userId = authorization.getUserId(jwtAuth)
+        val categoryUUID = try { UUID.fromString(id) } catch (_: IllegalArgumentException) {
+            throw IllegalArgumentException("Invalid category ID format")
+        }
         runBlocking {
             categoryService.deleteCategory(
-                categoryId = UUID.fromString(id),
+                categoryId = categoryUUID,
                 userId     = userId,
             )
         }
@@ -82,7 +91,7 @@ class CategoryController(
 }
 
 data class CreateCategoryRequest(
-    val name: String,
+    @field:NotBlank val name: String,
     val type: TransactionType,
     val emoji: String? = null,
     val icon: String? = null,   // web clients send "icon" — treated as an alias for emoji

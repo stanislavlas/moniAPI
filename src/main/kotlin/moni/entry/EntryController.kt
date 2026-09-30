@@ -11,7 +11,8 @@ import moni.common.successResponse
 import moni.dataStore.IDataStoreClient
 import moni.models.Amount
 import moni.models.TransactionType
-import moni.models.internal.Entry
+import moni.models.api.EntryResponse
+import moni.models.api.toApi
 import moni.models.internal.Necessity
 import java.time.LocalDate
 import java.time.YearMonth
@@ -36,7 +37,9 @@ class EntryController(
     ): List<Int> {
         return runBlocking {
             val user = authorization.getUser(jwtAuth, dataStoreClient)
-            val householdId = if (household) user.householdId else null
+            val householdId = if (household) {
+                user.householdId ?: throw IllegalArgumentException("You are not a member of any household")
+            } else null
             entryService.getActiveYears(userId = user.userId, householdId = householdId)
         }
     }
@@ -52,7 +55,9 @@ class EntryController(
     ): List<String> {
         return runBlocking {
             val user = authorization.getUser(jwtAuth, dataStoreClient)
-            val householdId = if (household) user.householdId else null
+            val householdId = if (household) {
+                user.householdId ?: throw IllegalArgumentException("You are not a member of any household")
+            } else null
             entryService.getActiveMonths(userId = user.userId, householdId = householdId)
         }
     }
@@ -63,7 +68,7 @@ class EntryController(
         @RequestParam(required = false) yearMonth: String?,
         @RequestParam(required = false) year: Int?,
         @RequestParam(required = false, defaultValue = "false") household: Boolean
-    ): List<Entry> {
+    ): List<EntryResponse> {
         val (fromDate, toDate) = when {
             yearMonth != null -> {
                 try {
@@ -82,35 +87,49 @@ class EntryController(
 
         return runBlocking {
             val user = authorization.getUser(jwtAuth, dataStoreClient)
-            val householdId = if (household) user.householdId else null
+            val householdId = if (household) {
+                user.householdId ?: throw IllegalArgumentException("You are not a member of any household")
+            } else null
             entryService.getEntries(
                 userId         = user.userId,
                 householdId    = householdId,
                 fromDate       = fromDate,
                 toDate         = toDate,
                 targetCurrency = user.currency,
-            )
+            ).map { it.toApi() }
         }
     }
 
     @PostMapping
     fun createEntry(
         @RequestHeader("Authorization") authorization: String,
-        @Valid @RequestBody request: CreateEntryRequest
-    ): Entry {
+        @Valid @RequestBody request: CreateEntryRequest,
+        @RequestParam(required = false, defaultValue = "false") household: Boolean
+    ): EntryResponse {
         return runBlocking {
             val user = authorization.getUser(jwtAuth, dataStoreClient)
+            val householdId = if (household) {
+                user.householdId ?: throw IllegalArgumentException("You are not a member of any household")
+            } else null
+            val categoryUUID = try {
+                UUID.fromString(request.categoryId)
+            } catch (_: IllegalArgumentException) {
+                throw IllegalArgumentException("Invalid category ID format")
+            }
             entryService.createEntry(
                 userId      = user.userId,
-                householdId = user.householdId,
+                householdId = householdId,
                 amount      = request.amount,
-                categoryId  = UUID.fromString(request.categoryId),
-                date        = LocalDate.parse(request.date),
+                categoryId  = categoryUUID,
+                date        = try { LocalDate.parse(request.date) } catch (_: java.time.format.DateTimeParseException) {
+                    throw IllegalArgumentException("Invalid date format. Expected YYYY-MM-DD")
+                },
                 name        = request.name,
                 note        = request.note ?: "",
                 type        = request.type,
-                necessity   = request.necessity
-            )
+                necessity   = request.necessity,
+                authorName  = user.name,
+            ).toApi()
         }
     }
 
@@ -118,16 +137,27 @@ class EntryController(
     fun updateEntry(
         @RequestHeader("Authorization") authorization: String,
         @PathVariable id: String,
-        @RequestBody request: UpdateEntryRequest
-    ): Entry {
+        @Valid @RequestBody request: UpdateEntryRequest
+    ): EntryResponse {
         val userId = authorization.getUserId(jwtAuth)
 
-        val categoryUUID = request.categoryId?.let { UUID.fromString(it) }
-        val dateLocal = request.date?.let { LocalDate.parse(it) }
+        val entryUUID = try { UUID.fromString(id) } catch (_: IllegalArgumentException) {
+            throw IllegalArgumentException("Invalid entry ID format")
+        }
+        val categoryUUID = request.categoryId?.let {
+            try { UUID.fromString(it) } catch (_: IllegalArgumentException) {
+                throw IllegalArgumentException("Invalid category ID format")
+            }
+        }
+        val dateLocal = request.date?.let {
+            try { LocalDate.parse(it) } catch (_: java.time.format.DateTimeParseException) {
+                throw IllegalArgumentException("Invalid date format. Expected YYYY-MM-DD")
+            }
+        }
 
         return runBlocking {
             entryService.updateEntry(
-                entryId = UUID.fromString(id),
+                entryId = entryUUID,
                 userId = userId,
                 amount = request.amount,
                 categoryId = categoryUUID,
@@ -135,7 +165,7 @@ class EntryController(
                 name = request.name,
                 note = request.note,
                 necessity = request.necessity
-            )
+            ).toApi()
         }
     }
 
@@ -145,10 +175,13 @@ class EntryController(
         @PathVariable id: String
     ): Map<String, Boolean> {
         val userId = authorization.getUserId(jwtAuth)
+        val entryUUID = try { UUID.fromString(id) } catch (_: IllegalArgumentException) {
+            throw IllegalArgumentException("Invalid entry ID format")
+        }
 
         runBlocking {
             entryService.deleteEntry(
-                entryId = UUID.fromString(id),
+                entryId = entryUUID,
                 userId = userId
             )
         }

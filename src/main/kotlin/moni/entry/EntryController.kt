@@ -37,9 +37,7 @@ class EntryController(
     ): List<Int> {
         return runBlocking {
             val user = authorization.getUser(jwtAuth, dataStoreClient)
-            val householdId = if (household) {
-                user.householdId ?: throw IllegalArgumentException("You are not a member of any household")
-            } else null
+            val householdId = if (household) user.householdId else null
             entryService.getActiveYears(userId = user.userId, householdId = householdId)
         }
     }
@@ -55,9 +53,7 @@ class EntryController(
     ): List<String> {
         return runBlocking {
             val user = authorization.getUser(jwtAuth, dataStoreClient)
-            val householdId = if (household) {
-                user.householdId ?: throw IllegalArgumentException("You are not a member of any household")
-            } else null
+            val householdId = if (household) user.householdId else null
             entryService.getActiveMonths(userId = user.userId, householdId = householdId)
         }
     }
@@ -87,9 +83,7 @@ class EntryController(
 
         return runBlocking {
             val user = authorization.getUser(jwtAuth, dataStoreClient)
-            val householdId = if (household) {
-                user.householdId ?: throw IllegalArgumentException("You are not a member of any household")
-            } else null
+            val householdId = if (household) user.householdId else null
             entryService.getEntries(
                 userId         = user.userId,
                 householdId    = householdId,
@@ -108,9 +102,7 @@ class EntryController(
     ): EntryResponse {
         return runBlocking {
             val user = authorization.getUser(jwtAuth, dataStoreClient)
-            val householdId = if (household) {
-                user.householdId ?: throw IllegalArgumentException("You are not a member of any household")
-            } else null
+            val householdId = if (household) user.householdId else null
             val categoryUUID = try {
                 UUID.fromString(request.categoryId)
             } catch (_: IllegalArgumentException) {

@@ -45,16 +45,18 @@ class EntryController(
     /**
      * Returns the distinct YYYY-MM month keys that contain at least one entry.
      * Clients use this to populate the month scroller without fetching full entry data.
+     * Optional [limit] restricts to the [limit] most-recent months (0 = no limit).
      */
     @GetMapping("/months")
     fun getActiveMonths(
         @RequestHeader("Authorization") authorization: String,
-        @RequestParam(required = false, defaultValue = "false") household: Boolean
+        @RequestParam(required = false, defaultValue = "false") household: Boolean,
+        @RequestParam(required = false, defaultValue = "0") limit: Int
     ): List<String> {
         return runBlocking {
             val user = authorization.getUser(jwtAuth, dataStoreClient)
             val householdId = if (household) user.householdId else null
-            entryService.getActiveMonths(userId = user.userId, householdId = householdId)
+            entryService.getActiveMonths(userId = user.userId, householdId = householdId, limit = limit)
         }
     }
 

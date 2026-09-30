@@ -39,13 +39,14 @@ class EntryService(
     /**
      * Returns deduplicated YYYY-MM strings for all months that contain at least one entry.
      * Sorted ascending. Used to build the month scroller on clients.
+     * When [limit] > 0, only the [limit] most-recent months are returned.
      */
-    suspend fun getActiveMonths(userId: UUID, householdId: UUID?): List<String> {
+    suspend fun getActiveMonths(userId: UUID, householdId: UUID?, limit: Int = 0): List<String> {
         return if (householdId != null) {
             householdService.assertMembership(userId, householdId)
-            entryRepository.findMonthsByHouseholdId(householdId)
+            entryRepository.findMonthsByHouseholdId(householdId, limit)
         } else {
-            entryRepository.findMonthsByUserId(userId)
+            entryRepository.findMonthsByUserId(userId, limit)
         }
     }
 

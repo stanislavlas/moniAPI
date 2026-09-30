@@ -121,26 +121,35 @@ class EntryRepository(
     /**
      * Returns distinct YYYY-MM month keys that have at least one entry for [userId].
      * Uses a ProjectionExpression to fetch only the date attribute — minimal data transfer.
+     * When [limit] is positive, only the [limit] most-recent months are returned.
      */
-    suspend fun findMonthsByUserId(userId: UUID): List<String> =
+    suspend fun findMonthsByUserId(userId: UUID, limit: Int = 0): List<String> =
         queryDistinctDatePrefixes(
             indexName = "userId-date-index",
             keyAttr   = USER_ID_ATTRIBUTE,
             keyValue  = userId.toString(),
             take      = 7,
-        ).distinct().sorted()
+        ).distinct().sorted().applyMonthLimit(limit)
 
     /**
      * Returns distinct YYYY-MM month keys that have at least one entry for [householdId].
      * Uses a ProjectionExpression to fetch only the date attribute — minimal data transfer.
+     * When [limit] is positive, only the [limit] most-recent months are returned.
      */
-    suspend fun findMonthsByHouseholdId(householdId: UUID): List<String> =
+    suspend fun findMonthsByHouseholdId(householdId: UUID, limit: Int = 0): List<String> =
         queryDistinctDatePrefixes(
             indexName = "householdId-date-index",
             keyAttr   = HOUSEHOLD_ID_ATTRIBUTE,
             keyValue  = householdId.toString(),
             take      = 7,
-        ).distinct().sorted()
+        ).distinct().sorted().applyMonthLimit(limit)
+
+    /**
+     * When [limit] > 0, returns the last [limit] elements (most-recent months, since list is sorted ascending).
+     * When [limit] <= 0, returns the full list unchanged.
+     */
+    private fun List<String>.applyMonthLimit(limit: Int): List<String> =
+        if (limit > 0) takeLast(limit) else this
 
     /**
      * Shared helper: queries [indexName] for all items matching [keyAttr] = [keyValue],

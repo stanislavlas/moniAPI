@@ -1,0 +1,20 @@
+meta {
+  name: List Active Years
+  type: http
+  seq: 2
+
+}
+
+get {
+  url: {{baseUrl}}/api/entries/years
+  body: none
+  auth: bearer
+}
+
+params:query {
+  ~household: true
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}

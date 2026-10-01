@@ -1,17 +1,17 @@
 meta {
-  name: Delete Entry
+  name: Cancel Invitation
   type: http
   seq: 6
 }
 
 delete {
-  url: {{baseUrl}}/api/entries/:entryId
+  url: {{baseUrl}}/api/households/invitations/:invitationId
   body: none
   auth: bearer
 }
 
 params:path {
-  entryId: REPLACE_WITH_ENTRY_ID
+  invitationId: REPLACE_WITH_INVITATION_ID
 }
 
 auth:bearer {

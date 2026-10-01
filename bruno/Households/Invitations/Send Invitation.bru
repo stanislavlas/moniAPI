@@ -1,11 +1,11 @@
 meta {
-  name: Add Member
+  name: Send Invitation
   type: http
-  seq: 4
+  seq: 1
 }
 
 post {
-  url: {{baseUrl}}/api/households/members
+  url: {{baseUrl}}/api/households/invitations
   body: json
   auth: bearer
 }

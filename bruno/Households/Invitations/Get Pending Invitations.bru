@@ -1,0 +1,15 @@
+meta {
+  name: Get Pending Invitations
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/households/invitations
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}

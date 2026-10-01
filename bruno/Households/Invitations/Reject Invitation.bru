@@ -1,0 +1,19 @@
+meta {
+  name: Reject Invitation
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/households/invitations/:invitationId/reject
+  body: none
+  auth: bearer
+}
+
+params:path {
+  invitationId: REPLACE_WITH_INVITATION_ID
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}

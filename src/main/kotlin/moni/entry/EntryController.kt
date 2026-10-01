@@ -100,11 +100,9 @@ class EntryController(
     fun createEntry(
         @RequestHeader("Authorization") authorization: String,
         @Valid @RequestBody request: CreateEntryRequest,
-        @RequestParam(required = false, defaultValue = "false") household: Boolean
     ): EntryResponse {
         return runBlocking {
             val user = authorization.getUser(jwtAuth, dataStoreClient)
-            val householdId = if (household) user.householdId else null
             val categoryUUID = try {
                 UUID.fromString(request.categoryId)
             } catch (_: IllegalArgumentException) {
@@ -112,7 +110,7 @@ class EntryController(
             }
             entryService.createEntry(
                 userId      = user.userId,
-                householdId = householdId,
+                householdId = user.householdId,
                 amount      = request.amount,
                 categoryId  = categoryUUID,
                 date        = try { LocalDate.parse(request.date) } catch (_: java.time.format.DateTimeParseException) {

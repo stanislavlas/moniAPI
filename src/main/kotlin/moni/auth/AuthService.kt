@@ -213,8 +213,7 @@ class AuthService(
             }
         }
 
-        // 2. Delete personal entries. Household entries were already deleted inside
-        //    deleteHousehold() above when the user was the owner.
+        // 2. Delete all entries authored by this user (personal and household).
         entryRepository.deleteByUserId(userId)
 
         // 3. Delete personal categories (household categories survive for other members).

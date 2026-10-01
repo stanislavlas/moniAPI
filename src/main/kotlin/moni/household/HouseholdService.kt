@@ -6,7 +6,6 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import moni.category.CategoryService
 import moni.config.ForbiddenException
-import moni.dataStore.EntryRepository
 import moni.dataStore.HouseholdInvitationRepository
 import moni.dataStore.HouseholdRepository
 import moni.dataStore.IDataStoreClient
@@ -21,7 +20,6 @@ class HouseholdService(
     private val dataStoreClient: IDataStoreClient,
     private val categoryService: CategoryService,
     private val invitationRepository: HouseholdInvitationRepository,
-    private val entryRepository: EntryRepository,
 ) {
 
     suspend fun getHouseholdByUserId(userId: UUID): Household? {
@@ -75,9 +73,6 @@ class HouseholdService(
         invitationRepository.findByHouseholdId(householdId).forEach { invitation ->
             invitationRepository.delete(invitation.invitationId)
         }
-
-        // Delete all entries belonging to the household
-        entryRepository.deleteByHouseholdId(householdId)
 
         householdRepository.delete(householdId)
     }

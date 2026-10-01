@@ -184,7 +184,7 @@ class EntryRepository(
         dynamoClient.deleteItem(deleteRequest)
     }
 
-    /** Delete all entries authored by [userId] (personal entries only — household entries are left). */
+    /** Delete all entries authored by [userId], including any household entries they created. */
     suspend fun deleteByUserId(userId: UUID) {
         val entries = findByUserId(userId, fromDate = null, toDate = null)
         coroutineScope { entries.map { async { delete(it.entryId) } }.awaitAll() }

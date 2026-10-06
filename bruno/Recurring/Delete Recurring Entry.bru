@@ -1,0 +1,19 @@
+meta {
+  name: Delete Recurring Entry
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/recurring/:recurringId
+  body: none
+  auth: bearer
+}
+
+params:path {
+  recurringId: REPLACE_WITH_RECURRING_ID
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}

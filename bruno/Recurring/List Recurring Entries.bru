@@ -1,0 +1,15 @@
+meta {
+  name: List Recurring Entries
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/recurring
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}

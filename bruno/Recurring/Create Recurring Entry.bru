@@ -1,0 +1,32 @@
+meta {
+  name: Create Recurring Entry
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/recurring
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "amount": {
+      "value": 1200.00,
+      "currency": "EUR"
+    },
+    "categoryId": "REPLACE_WITH_CATEGORY_ID",
+    "name": "Rent",
+    "note": "Monthly rent payment",
+    "type": "EXPENSE",
+    "necessity": "NECESSARY",
+    "frequency": "MONTHLY",
+    "dayOfMonth": 1,
+    "startDate": "2026-11-01"
+  }
+}

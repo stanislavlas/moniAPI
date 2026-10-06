@@ -1,0 +1,19 @@
+meta {
+  name: Deactivate Recurring Entry
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{baseUrl}}/api/recurring/:recurringId/deactivate
+  body: none
+  auth: bearer
+}
+
+params:path {
+  recurringId: REPLACE_WITH_RECURRING_ID
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}

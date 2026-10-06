@@ -18,6 +18,7 @@ import moni.models.internal.Entry
 import moni.models.internal.Necessity
 import moni.models.internal.User
 import java.math.BigDecimal
+import java.time.Instant
 import java.time.LocalDate
 import java.util.*
 
@@ -69,6 +70,7 @@ class EntryServiceTest {
             note        = "",
             type        = TransactionType.INVESTMENT,
             necessity   = Necessity.NECESSARY,
+            authorName  = "Alice",
         )
 
         assertEquals(TransactionType.INVESTMENT, result.type)
@@ -91,6 +93,7 @@ class EntryServiceTest {
             type        = TransactionType.INVESTMENT,
             necessity   = Necessity.NECESSARY,
             authorName  = "Alice",
+            createdAt   = Instant.now(),
         )
 
         coEvery { entryRepository.findByUserId(userId, any(), any()) } returns listOf(investEntry)

@@ -70,3 +70,7 @@ Throw these exception types from services/controllers; do **not** construct `Res
 3. If a new DynamoDB table is needed, add a `*Repository.kt` in `dataStore/`.
 4. Add a data class for the request body in the controller file; add a response shape in `models/api/` if it's a new resource type.
 5. Annotate request body fields with `@field:NotBlank` / `@field:Valid` as appropriate — `GlobalExceptionHandler` will turn validation failures into 400 responses automatically.
+
+### application.properties
+- Do **not** modify `application.properties` defaults for infrastructure config (`aws.url`, `aws.region`, etc.).
+- All environment-specific values (LocalStack port, AWS credentials, JWT secret, CORS origins) are injected via environment variables at runtime. The defaults in the file are intentional fallbacks for CI/clean checkouts only.

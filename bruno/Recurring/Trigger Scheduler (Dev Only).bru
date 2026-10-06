@@ -1,0 +1,15 @@
+meta {
+  name: Trigger Scheduler (Dev Only)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/recurring/trigger
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}

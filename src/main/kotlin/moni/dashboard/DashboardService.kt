@@ -4,6 +4,7 @@ import org.springframework.stereotype.Service
 import moni.currency.CurrencyConversionService
 import moni.dataStore.EntryRepository
 import moni.dataStore.HouseholdRepository
+import moni.dataStore.IDataStoreClient
 import moni.household.HouseholdService
 import moni.models.Amount
 import moni.models.TransactionType
@@ -15,6 +16,9 @@ import moni.models.api.YearDashboardResponse
 import moni.models.internal.Entry
 import moni.models.internal.Household
 import moni.models.internal.Necessity
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -85,6 +89,7 @@ class DashboardService(
     private val householdRepository: HouseholdRepository,
     private val currencyConversionService: CurrencyConversionService,
     private val householdService: HouseholdService,
+    private val dataStoreClient: IDataStoreClient,
 ) {
     /**
      * Shared helper: fetches entries for [userId] or [householdId] (with membership check),
@@ -108,6 +113,17 @@ class DashboardService(
         }
     }
 
+    /** Fetches current names for all household members in parallel by userId. */
+    private suspend fun buildMemberNameMap(household: Household?): Map<UUID, String> {
+        household ?: return emptyMap()
+        return coroutineScope {
+            household.members
+                .map { m -> async { m.userId to dataStoreClient.getUserById(m.userId).name } }
+                .awaitAll()
+                .toMap()
+        }
+    }
+
     suspend fun getDashboard(
         userId: UUID,
         householdId: UUID?,
@@ -121,8 +137,7 @@ class DashboardService(
             .filter { it.type != TransactionType.UNSUPPORTED }
             .map { entry -> entry.copy(amount = currencyConversionService.convertAmount(entry.amount, targetCurrency)) }
 
-        val memberNameMap: Map<UUID, String> = fetchedHousehold
-            ?.members?.associate { it.userId to it.name } ?: emptyMap()
+        val memberNameMap = buildMemberNameMap(fetchedHousehold)
 
         val summary = aggregateEntries(entries, targetCurrency, memberNameMap, householdId != null)
 
@@ -153,8 +168,7 @@ class DashboardService(
             .filter { it.type != TransactionType.UNSUPPORTED }
             .map { entry -> entry.copy(amount = currencyConversionService.convertAmount(entry.amount, targetCurrency)) }
 
-        val memberNameMap: Map<UUID, String> = fetchedHousehold
-            ?.members?.associate { it.userId to it.name } ?: emptyMap()
+        val memberNameMap = buildMemberNameMap(fetchedHousehold)
 
         // Group entries by YYYY-MM using explicit formatter — avoids fragile substring(0,7)
         val monthFormatter = DateTimeFormatter.ofPattern("yyyy-MM")

@@ -69,7 +69,7 @@ class RecurringEntryService(
             monthOfYear  = monthOfYear,
             startDate    = startDate,
             endDate      = endDate,
-            nextPostDate = startDate,
+            nextPostDate = firstPostDate(frequency, startDate, dayOfWeek, dayOfMonth, monthOfYear),
             active       = true,
             createdAt    = Instant.now(),
         )
@@ -80,12 +80,91 @@ class RecurringEntryService(
     suspend fun getRecurringEntries(userId: UUID): List<RecurringEntry> =
         recurringEntryRepository.findByUserId(userId)
 
+    suspend fun updateRecurringEntry(
+        recurringId: UUID,
+        userId: UUID,
+        amount: Amount,
+        categoryId: UUID,
+        name: String,
+        note: String,
+        type: TransactionType,
+        necessity: Necessity,
+        frequency: RecurrenceFrequency,
+        dayOfWeek: Int?,
+        dayOfMonth: Int?,
+        monthOfYear: Int?,
+        startDate: LocalDate,
+        endDate: LocalDate?,
+    ): RecurringEntry {
+        val existing = recurringEntryRepository.findById(recurringId)
+            ?: throw NoSuchElementException("Recurring entry not found")
+        if (existing.userId != userId) throw ForbiddenException("Not authorized to modify this recurring entry")
+
+        if (!currencyConversionService.isValidCurrency(amount.currency)) {
+            throw IllegalArgumentException("Unknown currency code")
+        }
+        validateFrequencyFields(frequency, dayOfWeek, dayOfMonth, monthOfYear)
+        if (endDate != null && endDate.isBefore(startDate)) {
+            throw IllegalArgumentException("endDate must not be before startDate")
+        }
+
+        val resolvedNecessity = if (type == TransactionType.EXPENSE) necessity else Necessity.NECESSARY
+
+        // Recompute nextPostDate only when the schedule changes, so we don't skip or double-post.
+        val scheduleChanged = existing.frequency != frequency ||
+            existing.dayOfWeek != dayOfWeek ||
+            existing.dayOfMonth != dayOfMonth ||
+            existing.monthOfYear != monthOfYear ||
+            existing.startDate != startDate
+        val nextPostDate = if (scheduleChanged)
+            firstPostDate(frequency, startDate, dayOfWeek, dayOfMonth, monthOfYear)
+        else
+            existing.nextPostDate
+
+        val updated = existing.copy(
+            amount      = amount,
+            categoryId  = categoryId,
+            name        = name,
+            note        = note,
+            type        = type,
+            necessity   = resolvedNecessity,
+            frequency   = frequency,
+            dayOfWeek   = dayOfWeek,
+            dayOfMonth  = dayOfMonth,
+            monthOfYear = monthOfYear,
+            startDate   = startDate,
+            endDate     = endDate,
+            nextPostDate = nextPostDate,
+        )
+        recurringEntryRepository.save(updated)
+        return updated
+    }
+
     suspend fun deactivateRecurringEntry(recurringId: UUID, userId: UUID): RecurringEntry {
         val existing = recurringEntryRepository.findById(recurringId)
             ?: throw NoSuchElementException("Recurring entry not found")
         if (existing.userId != userId) throw ForbiddenException("Not authorized to modify this recurring entry")
 
         val updated = existing.copy(active = false)
+        recurringEntryRepository.save(updated)
+        return updated
+    }
+
+    suspend fun reactivateRecurringEntry(recurringId: UUID, userId: UUID): RecurringEntry {
+        val existing = recurringEntryRepository.findById(recurringId)
+            ?: throw NoSuchElementException("Recurring entry not found")
+        if (existing.userId != userId) throw ForbiddenException("Not authorized to modify this recurring entry")
+
+        // Advance nextPostDate to the next occurrence on or after today, so the
+        // scheduler does not burst-post all missed occurrences since the entry was paused.
+        val today = LocalDate.now()
+        val nextPostDate = if (existing.nextPostDate >= today) {
+            existing.nextPostDate
+        } else {
+            firstPostDate(existing.frequency, today, existing.dayOfWeek, existing.dayOfMonth, existing.monthOfYear)
+        }
+
+        val updated = existing.copy(active = true, nextPostDate = nextPostDate)
         recurringEntryRepository.save(updated)
         return updated
     }
@@ -122,19 +201,12 @@ class RecurringEntryService(
      * Posts all pending occurrences of [template] up to and including [today],
      * then advances nextPostDate past today.
      *
-     * If the template has an endDate that has passed, it is deactivated.
+     * Deactivates the template immediately after posting the final occurrence
+     * (i.e. when the next computed date would exceed endDate).
      */
     internal suspend fun postTemplate(template: RecurringEntry, today: LocalDate) {
         var current = template
         while (current.nextPostDate <= today) {
-            // Stop if endDate has been reached
-            if (current.endDate != null && current.nextPostDate > current.endDate) {
-                val deactivated = current.copy(active = false)
-                recurringEntryRepository.save(deactivated)
-                logger.info("Deactivated expired recurring entry ${current.recurringId}")
-                return
-            }
-
             try {
                 val user = dataStoreClient.getUserById(current.userId)
                 entryService.createEntry(
@@ -156,12 +228,46 @@ class RecurringEntryService(
             }
 
             val next = advanceDate(current)
+
+            // Deactivate immediately if the next occurrence would exceed endDate,
+            // so the entry does not linger as active with a stale nextPostDate.
+            if (current.endDate != null && next > current.endDate) {
+                val deactivated = current.copy(nextPostDate = next, active = false)
+                recurringEntryRepository.save(deactivated)
+                logger.info("Deactivated expired recurring entry ${current.recurringId} (endDate=${current.endDate})")
+                return
+            }
+
             current = current.copy(nextPostDate = next)
             recurringEntryRepository.save(current)
         }
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
+
+    /**
+     * Computes the first post date on or after [startDate] that aligns with
+     * the given schedule fields.
+     *
+     * - DAILY/MONTHLY/YEARLY: startDate is already the anchor, return as-is.
+     * - WEEKLY: advance startDate forward until it lands on [dayOfWeek] (1=Mon…7=Sun).
+     */
+    internal fun firstPostDate(
+        frequency: RecurrenceFrequency,
+        startDate: LocalDate,
+        dayOfWeek: Int?,
+        dayOfMonth: Int?,
+        monthOfYear: Int?,
+    ): LocalDate {
+        if (frequency != RecurrenceFrequency.WEEKLY || dayOfWeek == null) return startDate
+        // DayOfWeek.of() uses ISO: 1=Monday…7=Sunday, same as our dayOfWeek field.
+        val target = java.time.DayOfWeek.of(dayOfWeek)
+        var date = startDate
+        while (date.dayOfWeek != target) {
+            date = date.plusDays(1)
+        }
+        return date
+    }
 
     /**
      * Computes the next post date after the current one based on frequency.
@@ -178,9 +284,12 @@ class RecurringEntryService(
                 next.withDayOfMonth(minOf(dom, next.lengthOfMonth()))
             }
             RecurrenceFrequency.YEARLY  -> {
-                val next = from.plusYears(1)
-                val dom  = entry.dayOfMonth ?: from.dayOfMonth
-                next.withDayOfMonth(minOf(dom, next.lengthOfMonth()))
+                // Build next date from the canonical month/day fields so yearly entries
+                // always fire in the correct month, regardless of what month `from` is in.
+                val month = entry.monthOfYear ?: from.monthValue
+                val dom   = entry.dayOfMonth  ?: from.dayOfMonth
+                val base  = LocalDate.of(from.year + 1, month, 1)
+                base.withDayOfMonth(minOf(dom, base.lengthOfMonth()))
             }
         }
     }

@@ -1,0 +1,36 @@
+meta {
+  name: Update Recurring Entry
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{baseUrl}}/api/recurring/:recurringId
+  body: json
+  auth: bearer
+}
+
+params:path {
+  recurringId: REPLACE_WITH_RECURRING_ID
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "amount": {
+      "value": 1200.00,
+      "currency": "EUR"
+    },
+    "categoryId": "REPLACE_WITH_CATEGORY_ID",
+    "name": "Rent",
+    "note": "Monthly rent payment",
+    "type": "EXPENSE",
+    "necessity": "NECESSARY",
+    "frequency": "MONTHLY",
+    "dayOfMonth": 1,
+    "startDate": "2026-11-01"
+  }
+}

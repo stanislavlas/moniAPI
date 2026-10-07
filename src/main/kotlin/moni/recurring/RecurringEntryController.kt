@@ -32,29 +32,29 @@ class RecurringEntryController(
         @RequestHeader("Authorization") authorization: String,
         @Valid @RequestBody request: CreateRecurringEntryRequest,
     ): RecurringEntryResponse {
+        val userId = authorization.getUserId(jwtAuth)
+
+        val categoryUUID = try {
+            UUID.fromString(request.categoryId)
+        } catch (_: IllegalArgumentException) {
+            throw IllegalArgumentException("Invalid category ID format")
+        }
+
+        val startDate = try {
+            LocalDate.parse(request.startDate)
+        } catch (_: DateTimeParseException) {
+            throw IllegalArgumentException("Invalid startDate format. Expected YYYY-MM-DD")
+        }
+
+        val endDate = request.endDate?.let {
+            try { LocalDate.parse(it) } catch (_: DateTimeParseException) {
+                throw IllegalArgumentException("Invalid endDate format. Expected YYYY-MM-DD")
+            }
+        }
+
         return runBlocking {
-            val user = authorization.getUser(jwtAuth, dataStoreClient)
-
-            val categoryUUID = try {
-                UUID.fromString(request.categoryId)
-            } catch (_: IllegalArgumentException) {
-                throw IllegalArgumentException("Invalid category ID format")
-            }
-
-            val startDate = try {
-                LocalDate.parse(request.startDate)
-            } catch (_: DateTimeParseException) {
-                throw IllegalArgumentException("Invalid startDate format. Expected YYYY-MM-DD")
-            }
-
-            val endDate = request.endDate?.let {
-                try { LocalDate.parse(it) } catch (_: DateTimeParseException) {
-                    throw IllegalArgumentException("Invalid endDate format. Expected YYYY-MM-DD")
-                }
-            }
-
             recurringEntryService.createRecurringEntry(
-                userId      = user.userId,
+                userId      = userId,
                 amount      = request.amount,
                 categoryId  = categoryUUID,
                 name        = request.name,
@@ -81,6 +81,47 @@ class RecurringEntryController(
         }
     }
 
+    @PutMapping("/{id}")
+    fun updateRecurringEntry(
+        @RequestHeader("Authorization") authorization: String,
+        @PathVariable id: String,
+        @Valid @RequestBody request: UpdateRecurringEntryRequest,
+    ): RecurringEntryResponse {
+        val userId = authorization.getUserId(jwtAuth)
+        val recurringId = try { UUID.fromString(id) } catch (_: IllegalArgumentException) {
+            throw IllegalArgumentException("Invalid recurring entry ID format")
+        }
+        val categoryUUID = try { UUID.fromString(request.categoryId) } catch (_: IllegalArgumentException) {
+            throw IllegalArgumentException("Invalid category ID format")
+        }
+        val startDate = try { LocalDate.parse(request.startDate) } catch (_: DateTimeParseException) {
+            throw IllegalArgumentException("Invalid startDate format. Expected YYYY-MM-DD")
+        }
+        val endDate = request.endDate?.let {
+            try { LocalDate.parse(it) } catch (_: DateTimeParseException) {
+                throw IllegalArgumentException("Invalid endDate format. Expected YYYY-MM-DD")
+            }
+        }
+        return runBlocking {
+            recurringEntryService.updateRecurringEntry(
+                recurringId = recurringId,
+                userId      = userId,
+                amount      = request.amount,
+                categoryId  = categoryUUID,
+                name        = request.name,
+                note        = request.note ?: "",
+                type        = request.type,
+                necessity   = request.necessity,
+                frequency   = request.frequency,
+                dayOfWeek   = request.dayOfWeek,
+                dayOfMonth  = request.dayOfMonth,
+                monthOfYear = request.monthOfYear,
+                startDate   = startDate,
+                endDate     = endDate,
+            ).toApi()
+        }
+    }
+
     @DeleteMapping("/{id}/deactivate")
     fun deactivateRecurringEntry(
         @RequestHeader("Authorization") authorization: String,
@@ -92,6 +133,20 @@ class RecurringEntryController(
         }
         return runBlocking {
             recurringEntryService.deactivateRecurringEntry(recurringId, userId).toApi()
+        }
+    }
+
+    @PostMapping("/{id}/reactivate")
+    fun reactivateRecurringEntry(
+        @RequestHeader("Authorization") authorization: String,
+        @PathVariable id: String,
+    ): RecurringEntryResponse {
+        val userId = authorization.getUserId(jwtAuth)
+        val recurringId = try { UUID.fromString(id) } catch (_: IllegalArgumentException) {
+            throw IllegalArgumentException("Invalid recurring entry ID format")
+        }
+        return runBlocking {
+            recurringEntryService.reactivateRecurringEntry(recurringId, userId).toApi()
         }
     }
 
@@ -137,6 +192,21 @@ data class CreateRecurringEntryRequest(
     /** Day of month 1–28. Required for MONTHLY and YEARLY. */
     val dayOfMonth: Int?,
     /** Month of year 1–12. Required for YEARLY. */
+    val monthOfYear: Int?,
+    @field:NotBlank val startDate: String,
+    val endDate: String?,
+)
+
+data class UpdateRecurringEntryRequest(
+    val amount: Amount,
+    @field:NotBlank val categoryId: String,
+    @field:NotBlank val name: String,
+    val note: String?,
+    val type: TransactionType,
+    val necessity: Necessity,
+    val frequency: RecurrenceFrequency,
+    val dayOfWeek: Int?,
+    val dayOfMonth: Int?,
     val monthOfYear: Int?,
     @field:NotBlank val startDate: String,
     val endDate: String?,

@@ -1,11 +1,11 @@
 meta {
-  name: Delete Recurring Entry
+  name: Reactivate Recurring Entry
   type: http
-  seq: 6
+  seq: 5
 }
 
-delete {
-  url: {{baseUrl}}/api/recurring/:recurringId
+post {
+  url: {{baseUrl}}/api/recurring/:recurringId/reactivate
   body: none
   auth: bearer
 }

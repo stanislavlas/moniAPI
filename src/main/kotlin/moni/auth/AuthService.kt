@@ -8,6 +8,7 @@ import moni.config.ForbiddenException
 import moni.currency.CurrencyConversionService
 import moni.dataStore.EntryRepository
 import moni.dataStore.IDataStoreClient
+import moni.dataStore.RecurringEntryRepository
 import moni.household.HouseholdService
 import moni.models.Currency
 import moni.models.api.AuthUserResponse
@@ -28,6 +29,7 @@ class AuthService(
     private val entryRepository: EntryRepository,
     private val categoryService: CategoryService,
     private val householdService: HouseholdService,
+    private val recurringEntryRepository: RecurringEntryRepository,
 ) {
     suspend fun getUserWithJwt(email: String, password: String): AuthUserResponse {
         val user = dataStore.getUserByEmail(email.trim().lowercase())
@@ -216,13 +218,16 @@ class AuthService(
         // 2. Delete all entries authored by this user (personal and household).
         entryRepository.deleteByUserId(userId)
 
-        // 3. Delete personal categories (household categories survive for other members).
+        // 3. Delete all recurring entry templates for this user.
+        recurringEntryRepository.deleteByUserId(userId)
+
+        // 4. Delete personal categories (household categories survive for other members).
         categoryService.deletePersonalCategories(userId)
 
-        // 4. Revoke all refresh tokens.
+        // 5. Revoke all refresh tokens.
         refreshTokenService.revokeAllUserTokens(userId)
 
-        // 5. Delete user record last — everything referencing it has been cleaned up.
+        // 6. Delete user record last — everything referencing it has been cleaned up.
         dataStore.deleteUser(userId)
     }
 

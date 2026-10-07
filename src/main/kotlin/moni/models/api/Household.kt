@@ -1,6 +1,7 @@
 package moni.models.api
 
 import moni.models.internal.MemberRole
+import moni.models.internal.User
 import java.time.Instant
 import java.util.UUID
 
@@ -20,15 +21,16 @@ data class HouseholdResponse(
     val createdAt: Instant,
 )
 
-fun moni.models.internal.Household.toApi() = HouseholdResponse(
+fun moni.models.internal.Household.toApi(memberUsers: Map<UUID, User>) = HouseholdResponse(
     householdId = householdId,
     name        = name,
     ownerId     = ownerId,
-    members     = members.map { m ->
+    members     = members.mapNotNull { m ->
+        val user = memberUsers[m.userId] ?: return@mapNotNull null
         HouseholdMemberResponse(
             userId   = m.userId,
-            name     = m.name,
-            email    = m.email,
+            name     = user.name,
+            email    = user.email,
             role     = m.role,
             joinedAt = m.joinedAt,
         )

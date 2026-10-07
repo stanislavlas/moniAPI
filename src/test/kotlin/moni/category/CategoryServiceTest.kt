@@ -79,6 +79,7 @@ class CategoryServiceTest {
         val original    = cat()
 
         coEvery { repo.findByUserId(userId) } returns listOf(original)
+        coEvery { repo.deleteByUserId(userId) } returns Unit
         val saved = slot<Category>()
         coEvery { repo.save(capture(saved), null) } returns Unit
 
@@ -95,6 +96,7 @@ class CategoryServiceTest {
         val householdId = UUID.randomUUID()
 
         coEvery { repo.findByUserId(userId) } returns emptyList()
+        coEvery { repo.deleteByUserId(userId) } returns Unit
 
         service.assignToHousehold(userId, householdId)
 

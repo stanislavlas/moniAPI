@@ -13,8 +13,6 @@ data class Household(
 
 data class HouseholdMember(
     val userId: UUID,
-    val name: String,
-    val email: String,
     val role: MemberRole,
     val joinedAt: Instant = Instant.now()
 )

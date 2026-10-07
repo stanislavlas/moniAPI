@@ -39,13 +39,14 @@ class HouseholdInvitationServiceTest {
     )
     private val household = Household(
         householdId = householdId, name = "Our Home", ownerId = ownerId,
-        members = listOf(HouseholdMember(ownerId, "Alice", "alice@example.com", MemberRole.OWNER)),
+        members = listOf(HouseholdMember(ownerId, MemberRole.OWNER)),
     )
 
     @BeforeEach
     fun setUp() {
         coEvery { dataStoreClient.getUserById(ownerId) } returns owner
         coEvery { dataStoreClient.getUserById(inviteeId) } returns invitee
+        coEvery { dataStoreClient.getUserByEmail("bob@example.com") } returns invitee
         coEvery { householdRepo.findById(householdId) } returns household
         coEvery { invitationRepo.findByInvitedEmail("bob@example.com") } returns emptyList()
     }
@@ -73,7 +74,7 @@ class HouseholdInvitationServiceTest {
     @Test
     fun `sendInvitation throws when invitee is already a member`() {
         val hhWithBob = household.copy(
-            members = household.members + HouseholdMember(inviteeId, "Bob", "bob@example.com", MemberRole.MEMBER)
+            members = household.members + HouseholdMember(inviteeId, MemberRole.MEMBER)
         )
         coEvery { householdRepo.findById(householdId) } returns hhWithBob
         assertThrows<IllegalArgumentException> {
@@ -125,7 +126,7 @@ class HouseholdInvitationServiceTest {
             invitedByName = "Alice", invitedEmail = "someone-else@example.com",
             status = InvitationStatus.PENDING, expiresAt = Instant.now().plusSeconds(3600),
         )
-        assertThrows<IllegalArgumentException> {
+        assertThrows<NoSuchElementException> {
             runBlocking { service.acceptInvitation(inviteeId, invId) }
         }
     }

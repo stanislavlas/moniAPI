@@ -252,12 +252,13 @@ class RecurringEntryServiceTest {
         )
         val savedSlots = mutableListOf<RecurringEntry>()
         coEvery { recurringEntryRepository.save(capture(savedSlots)) } returns Unit
+        coEvery { entryService.createEntry(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns mockk()
 
         service.postTemplate(template, LocalDate.of(2026, 10, 1))
 
         assertEquals(1, savedSlots.size)
         assertFalse(savedSlots[0].active)
-        coVerify(exactly = 0) { entryService.createEntry(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { entryService.createEntry(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test

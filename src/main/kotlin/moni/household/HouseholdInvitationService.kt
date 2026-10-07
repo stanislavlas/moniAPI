@@ -24,11 +24,11 @@ class HouseholdInvitationService(
             owner.householdId ?: throw IllegalArgumentException("You are not in a household")
         ) ?: throw IllegalArgumentException("Household not found")
         if (household.ownerId != ownerUserId) throw IllegalArgumentException("Only the owner can invite members")
-        if (household.members.any { it.email.equals(normEmail, ignoreCase = true) })
-            throw IllegalArgumentException("That user is already a member of this household")
-
-        dataStoreClient.getUserByEmail(normEmail)
+        val invitedUser = dataStoreClient.getUserByEmail(normEmail)
             ?: throw IllegalArgumentException("No account found for that email address")
+
+        if (household.members.any { it.userId == invitedUser.userId })
+            throw IllegalArgumentException("That user is already a member of this household")
 
         val existing = invitationRepository.findByInvitedEmail(normEmail)
             .firstOrNull { it.householdId == household.householdId && it.status == InvitationStatus.PENDING }

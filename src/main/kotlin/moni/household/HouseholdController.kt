@@ -25,9 +25,15 @@ class HouseholdController(
         @RequestHeader("Authorization") authorization: String
     ): ResponseEntity<HouseholdResponse> {
         val userId = authorization.getUserId(jwtAuth)
-        val household = runBlocking { householdService.getHouseholdByUserId(userId) }
-        return if (household != null) ResponseEntity.ok(household.toApi())
-        else ResponseEntity.noContent().build()
+        return runBlocking {
+            val household = householdService.getHouseholdByUserId(userId)
+            if (household != null) {
+                val memberUsers = householdService.fetchMemberUsers(household)
+                ResponseEntity.ok(household.toApi(memberUsers))
+            } else {
+                ResponseEntity.noContent().build()
+            }
+        }
     }
 
     @PostMapping
@@ -37,7 +43,9 @@ class HouseholdController(
     ): HouseholdResponse {
         val userId = authorization.getUserId(jwtAuth)
         return runBlocking {
-            householdService.createHousehold(userId = userId, name = request.name).toApi()
+            val household = householdService.createHousehold(userId = userId, name = request.name)
+            val memberUsers = householdService.fetchMemberUsers(household)
+            household.toApi(memberUsers)
         }
     }
 
@@ -49,7 +57,9 @@ class HouseholdController(
         val userId = authorization.getUserId(jwtAuth)
         return runBlocking {
             val householdId = requireHouseholdId(userId)
-            householdService.renameHousehold(householdId = householdId, userId = userId, newName = request.name).toApi()
+            val household = householdService.renameHousehold(householdId = householdId, userId = userId, newName = request.name)
+            val memberUsers = householdService.fetchMemberUsers(household)
+            household.toApi(memberUsers)
         }
     }
 
@@ -76,11 +86,13 @@ class HouseholdController(
         }
         return runBlocking {
             val householdId = requireHouseholdId(ownerId)
-            householdService.removeMember(
+            val household = householdService.removeMember(
                 householdId  = householdId,
                 ownerId      = ownerId,
                 memberUserId = memberUUID,
-            ).toApi()
+            )
+            val memberUsers = householdService.fetchMemberUsers(household)
+            household.toApi(memberUsers)
         }
     }
 

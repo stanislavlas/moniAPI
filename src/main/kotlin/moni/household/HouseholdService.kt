@@ -12,6 +12,7 @@ import moni.dataStore.IDataStoreClient
 import moni.models.internal.Household
 import moni.models.internal.HouseholdMember
 import moni.models.internal.MemberRole
+import moni.models.internal.User
 import java.util.*
 
 @Service
@@ -40,7 +41,7 @@ class HouseholdService(
             householdId = UUID.randomUUID(),
             name        = name,
             ownerId     = userId,
-            members     = listOf(HouseholdMember(userId, user.name, user.email, MemberRole.OWNER)),
+            members     = listOf(HouseholdMember(userId, MemberRole.OWNER)),
         )
         householdRepository.save(household)
         categoryService.assignToHousehold(userId, household.householdId)
@@ -94,7 +95,7 @@ class HouseholdService(
             throw IllegalArgumentException("User is already a member of this household")
 
         val updated = household.copy(
-            members = household.members + HouseholdMember(newMember.userId, newMember.name, newMember.email, MemberRole.MEMBER)
+            members = household.members + HouseholdMember(newMember.userId, MemberRole.MEMBER)
         )
         householdRepository.save(updated)
         categoryService.assignToHousehold(joiningUserId, household.householdId)
@@ -145,5 +146,16 @@ class HouseholdService(
     fun assertMembership(userId: UUID, household: Household) {
         if (household.members.none { it.userId == userId })
             throw ForbiddenException("User is not a member of this household")
+    }
+
+    /**
+     * Fetches live [User] records for every member in [household] in parallel.
+     * Returns a map of userId → User for use when building API responses.
+     */
+    suspend fun fetchMemberUsers(household: Household): Map<UUID, User> = coroutineScope {
+        household.members
+            .map { member -> async { dataStoreClient.getUserById(member.userId) } }
+            .awaitAll()
+            .associateBy { it.userId }
     }
 }

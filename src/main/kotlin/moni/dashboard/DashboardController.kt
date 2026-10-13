@@ -42,6 +42,25 @@ class DashboardController(
         }
     }
 
+    @GetMapping("/recent")
+    fun getRecentDashboard(
+        @RequestHeader("Authorization") authorization: String,
+        @RequestParam(required = false, defaultValue = "false") household: Boolean,
+        @RequestParam(required = false, defaultValue = "12") months: Int,
+    ): YearDashboardResponse {
+        return runBlocking {
+            val user = authorization.getUser(jwtAuth, dataStoreClient)
+            if (months < 1 || months > 24) throw IllegalArgumentException("months must be between 1 and 24")
+            val householdId = if (household) user.householdId else null
+            dashboardService.getRecentDashboard(
+                userId         = user.userId,
+                householdId    = householdId,
+                months         = months,
+                targetCurrency = user.currency,
+            )
+        }
+    }
+
     @GetMapping("/year")
     fun getYearDashboard(
         @RequestHeader("Authorization") authorization: String,

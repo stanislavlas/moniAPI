@@ -19,7 +19,6 @@ import moni.models.internal.Necessity
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.*
@@ -29,8 +28,8 @@ private fun List<Entry>.sumAmountValues(): BigDecimal =
     fold(BigDecimal.ZERO) { acc, entry -> acc + entry.amount.value }
 
 /**
- * Aggregates a list of already-converted entries into a MonthSummary.
- * Used by both getDashboard() and getYearDashboard() to avoid duplication.
+ * Aggregates a list of already-converted entries into a Summary.
+ * Used by getDashboard(), getYearDashboard(), and getRecentDashboard().
  */
 private fun aggregateEntries(
     entries: List<Entry>,
@@ -78,8 +77,8 @@ private fun aggregateEntries(
             necessary = Amount(needs, targetCurrency),
             optional  = Amount(wants, targetCurrency),
         ),
-        expensesByCategory  = expensesByCategory,
-        memberBreakdown     = memberBreakdown,
+        expensesByCategory = expensesByCategory,
+        memberBreakdown    = memberBreakdown,
     )
 }
 
@@ -142,14 +141,54 @@ class DashboardService(
         val summary = aggregateEntries(entries, targetCurrency, memberNameMap, householdId != null)
 
         return DashboardResponse(
-            totalIncome          = summary.totalIncome,
-            totalExpenses        = summary.totalExpenses,
-            totalInvestments     = summary.totalInvestments,
-            savedAmount          = summary.savedAmount,
-            necessaryVsOptional  = summary.necessaryVsOptional,
-            expensesByCategory   = summary.expensesByCategory,
-            memberBreakdown      = summary.memberBreakdown,
-            householdName        = fetchedHousehold?.name,
+            totalIncome         = summary.totalIncome,
+            totalExpenses       = summary.totalExpenses,
+            totalInvestments    = summary.totalInvestments,
+            savedAmount         = summary.savedAmount,
+            necessaryVsOptional = summary.necessaryVsOptional,
+            expensesByCategory  = summary.expensesByCategory,
+            memberBreakdown     = summary.memberBreakdown,
+            householdName       = fetchedHousehold?.name,
+        )
+    }
+
+    suspend fun getRecentDashboard(
+        userId: UUID,
+        householdId: UUID?,
+        months: Int,
+        targetCurrency: String,
+    ): YearDashboardResponse {
+        val today    = LocalDate.now()
+        // Go back `months - 1` months so we include the current month
+        val fromDate = today.withDayOfMonth(1).minusMonths((months - 1).toLong())
+        val toDate   = today.withDayOfMonth(today.lengthOfMonth())
+
+        val (rawEntries, fetchedHousehold) = fetchEntriesAndHousehold(userId, householdId, fromDate, toDate)
+
+        val entries = rawEntries
+            .filter { it.type != TransactionType.UNSUPPORTED }
+            .map { entry -> entry.copy(amount = currencyConversionService.convertAmount(entry.amount, targetCurrency)) }
+
+        val memberNameMap = buildMemberNameMap(fetchedHousehold)
+
+        val monthFormatter = DateTimeFormatter.ofPattern("yyyy-MM")
+        val byMonth: Map<String, List<Entry>> = entries.groupBy { it.date.format(monthFormatter) }
+
+        // Build exactly `months` month slots ending at the current month
+        val recentMonths: Map<String, Summary> = (0 until months).associate { offset ->
+            val monthDate = today.withDayOfMonth(1).minusMonths((months - 1 - offset).toLong())
+            val ym        = monthDate.format(monthFormatter)
+            val monthEntries = byMonth[ym] ?: emptyList()
+            ym to aggregateEntries(monthEntries, targetCurrency, memberNameMap, householdId != null)
+        }
+
+        val yearTotals = aggregateEntries(entries, targetCurrency, memberNameMap, householdId != null)
+
+        return YearDashboardResponse(
+            year          = 0, // not used for recent-months view
+            months        = recentMonths,
+            yearTotals    = yearTotals,
+            householdName = fetchedHousehold?.name,
         )
     }
 
@@ -181,7 +220,7 @@ class DashboardService(
             ym to aggregateEntries(monthEntries, targetCurrency, memberNameMap, householdId != null)
         }
 
-        // Year totals — aggregate all entries (same helper, whole-year list)
+        // Year totals — aggregate all entries
         val yearTotals = aggregateEntries(entries, targetCurrency, memberNameMap, householdId != null)
 
         return YearDashboardResponse(

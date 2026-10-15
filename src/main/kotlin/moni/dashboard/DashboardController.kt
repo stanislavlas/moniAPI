@@ -17,6 +17,15 @@ class DashboardController(
     private val jwtAuth: JwtAuth,
     private val dataStoreClient: IDataStoreClient,
 ) {
+    private fun parseRange(fromDate: String, toDate: String): Pair<LocalDate, LocalDate> {
+        val from = try { LocalDate.parse(fromDate) }
+            catch (_: DateTimeParseException) { throw IllegalArgumentException("Invalid fromDate format. Expected YYYY-MM-DD") }
+        val to = try { LocalDate.parse(toDate) }
+            catch (_: DateTimeParseException) { throw IllegalArgumentException("Invalid toDate format. Expected YYYY-MM-DD") }
+        if (from.isAfter(to)) throw IllegalArgumentException("fromDate must not be after toDate")
+        return from to to
+    }
+
     @GetMapping
     fun getDashboard(
         @RequestHeader("Authorization") authorization: String,
@@ -27,11 +36,7 @@ class DashboardController(
         return runBlocking {
             val user = authorization.getUser(jwtAuth, dataStoreClient)
             val householdId = if (household) user.householdId else null
-            val parsedFrom = try { LocalDate.parse(fromDate) }
-                catch (_: DateTimeParseException) { throw IllegalArgumentException("Invalid fromDate format. Expected YYYY-MM-DD") }
-            val parsedTo   = try { LocalDate.parse(toDate) }
-                catch (_: DateTimeParseException) { throw IllegalArgumentException("Invalid toDate format. Expected YYYY-MM-DD") }
-            if (parsedFrom.isAfter(parsedTo)) throw IllegalArgumentException("fromDate must not be after toDate")
+            val (parsedFrom, parsedTo) = parseRange(fromDate, toDate)
             dashboardService.getDashboard(
                 userId         = user.userId,
                 householdId    = householdId,
@@ -46,16 +51,18 @@ class DashboardController(
     fun getYearDashboard(
         @RequestHeader("Authorization") authorization: String,
         @RequestParam(required = false, defaultValue = "false") household: Boolean,
-        @RequestParam year: Int,
+        @RequestParam fromDate: String,
+        @RequestParam toDate: String,
     ): YearDashboardResponse {
         return runBlocking {
             val user = authorization.getUser(jwtAuth, dataStoreClient)
-            if (year < 2000 || year > 2100) throw IllegalArgumentException("year must be between 2000 and 2100")
             val householdId = if (household) user.householdId else null
+            val (parsedFrom, parsedTo) = parseRange(fromDate, toDate)
             dashboardService.getYearDashboard(
                 userId         = user.userId,
                 householdId    = householdId,
-                year           = year,
+                fromDate       = parsedFrom,
+                toDate         = parsedTo,
                 targetCurrency = user.currency,
             )
         }

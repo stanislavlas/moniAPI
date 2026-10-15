@@ -5,13 +5,14 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/dashboard/year?year=2026
+  url: {{baseUrl}}/api/dashboard/year?fromDate=2026-01-01&toDate=2026-12-31
   body: none
   auth: bearer
 }
 
 params:query {
-  year: 2026
+  fromDate: 2026-01-01
+  toDate: 2026-12-31
   ~household: true
 }
 

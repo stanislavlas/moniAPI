@@ -18,12 +18,14 @@ data class Summary(
 
 /**
  * Response for GET /api/dashboard/year.
- * One DynamoDB query covers the whole year; months without data have zero-value summaries.
+ * Covers the requested date range; one bucket per calendar month in the range.
  */
 data class YearDashboardResponse(
-    val year: Int,
-    val months: Map<String, Summary>,         // key = "YYYY-MM", always 12 entries
-    val yearTotals: Summary,                  // aggregate across all 12 months
+    val year: Int?,                           // calendar year, or null for multi-year/trailing ranges
+    val months: Map<String, Summary>,         // key = "YYYY-MM", one entry per month in range
+    val yearTotals: Summary,                  // aggregate across all months in range
+    val monthlyAverages: Summary,             // yearTotals divided by activeMonthCount (active months only)
+    val activeMonthCount: Int,                // number of months that had any activity
     val householdName: String?,
 )
 

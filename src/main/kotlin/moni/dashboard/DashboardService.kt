@@ -8,9 +8,8 @@ import moni.dataStore.IDataStoreClient
 import moni.household.HouseholdService
 import moni.models.Amount
 import moni.models.TransactionType
-import moni.models.api.DashboardResponse
 import moni.models.api.MemberBreakdown
-import moni.models.api.Summary
+import moni.models.api.DashboardResponse
 import moni.models.api.NecessaryVsOptionalBreakdown
 import moni.models.api.YearDashboardResponse
 import moni.models.internal.Entry
@@ -31,14 +30,14 @@ private fun List<Entry>.sumAmountValues(): BigDecimal =
     fold(BigDecimal.ZERO) { acc, entry -> acc + entry.amount.value }
 
 /**
- * Divides every Amount in a Summary by [divisor] to produce a per-month average Summary.
+ * Divides every Amount in a DashboardResponse by [divisor] to produce a per-month average DashboardResponse.
  * A divisor of zero is guarded against by returning the summary unchanged (shouldn't happen in practice).
  */
-private fun Summary.divideBy(divisor: Int): Summary {
+private fun DashboardResponse.divideBy(divisor: Int): DashboardResponse {
     if (divisor <= 0) return this
     val d = divisor.toBigDecimal()
     fun Amount.avg() = Amount(value.divide(d, 2, RoundingMode.HALF_UP), currency)
-    return Summary(
+    return DashboardResponse(
         totalIncome         = totalIncome.avg(),
         totalExpenses       = totalExpenses.avg(),
         totalInvestments    = totalInvestments.avg(),
@@ -60,7 +59,7 @@ private fun Summary.divideBy(divisor: Int): Summary {
 }
 
 /**
- * Aggregates a list of already-converted entries into a Summary.
+ * Aggregates a list of already-converted entries into a DashboardResponse.
  * Used by getDashboard(), getYearDashboard(), and getRecentDashboard().
  */
 private fun aggregateEntries(
@@ -68,7 +67,7 @@ private fun aggregateEntries(
     targetCurrency: String,
     memberNameMap: Map<UUID, String>,
     isHousehold: Boolean,
-): Summary {
+): DashboardResponse {
     val income      = entries.filter { it.type == TransactionType.INCOME      }.sumAmountValues()
     val expenses    = entries.filter { it.type == TransactionType.EXPENSE     }.sumAmountValues()
     val investments = entries.filter { it.type == TransactionType.INVESTMENT  }.sumAmountValues()
@@ -100,7 +99,7 @@ private fun aggregateEntries(
             .sortedByDescending { it.totalExpenses.value }
     } else null
 
-    return Summary(
+    return DashboardResponse(
         totalIncome         = Amount(income, targetCurrency),
         totalExpenses       = Amount(expenses, targetCurrency),
         totalInvestments    = Amount(investments, targetCurrency),
@@ -170,18 +169,7 @@ class DashboardService(
 
         val memberNameMap = buildMemberNameMap(fetchedHousehold)
 
-        val summary = aggregateEntries(entries, targetCurrency, memberNameMap, householdId != null)
-
-        return DashboardResponse(
-            totalIncome         = summary.totalIncome,
-            totalExpenses       = summary.totalExpenses,
-            totalInvestments    = summary.totalInvestments,
-            savedAmount         = summary.savedAmount,
-            necessaryVsOptional = summary.necessaryVsOptional,
-            expensesByCategory  = summary.expensesByCategory,
-            memberBreakdown     = summary.memberBreakdown,
-            householdName       = fetchedHousehold?.name,
-        )
+        return aggregateEntries(entries, targetCurrency, memberNameMap, householdId != null)
     }
 
     suspend fun getYearDashboard(
@@ -199,32 +187,21 @@ class DashboardService(
 
         val memberNameMap = buildMemberNameMap(fetchedHousehold)
 
-        // Group entries by YYYY-MM using explicit formatter — avoids fragile substring(0,7)
-        val monthFormatter = DateTimeFormatter.ofPattern("yyyy-MM")
-        val byMonth: Map<String, List<Entry>> = entries.groupBy { it.date.format(monthFormatter) }
-
-        // Build one bucket per month in the requested range — guaranteed contiguous coverage
-        val monthCount = ChronoUnit.MONTHS.between(fromDate, toDate).toInt() + 1
-        val months: Map<String, Summary> = (0 until monthCount).associate { offset ->
-            val ym           = fromDate.plusMonths(offset.toLong()).format(monthFormatter)
-            val monthEntries = byMonth[ym] ?: emptyList()
-            ym to aggregateEntries(monthEntries, targetCurrency, memberNameMap, householdId != null)
-        }
-
         // Totals — aggregate all entries in the range
         val yearTotals = aggregateEntries(entries, targetCurrency, memberNameMap, householdId != null)
 
         // Monthly averages — divide totals by the number of months that had any activity
-        val activeMonthCount = months.values.count { m ->
-            m.totalIncome.value > BigDecimal.ZERO ||
-            m.totalExpenses.value > BigDecimal.ZERO ||
-            m.totalInvestments.value > BigDecimal.ZERO
+        val monthFormatter = DateTimeFormatter.ofPattern("yyyy-MM")
+        val byMonth = entries.groupBy { it.date.format(monthFormatter) }
+        val monthCount = ChronoUnit.MONTHS.between(fromDate, toDate).toInt() + 1
+        val activeMonthCount = (0 until monthCount).count { offset ->
+            val ym = fromDate.plusMonths(offset.toLong()).format(monthFormatter)
+            byMonth[ym]?.isNotEmpty() == true
         }
         val monthlyAverages = yearTotals.divideBy(activeMonthCount.coerceAtLeast(1))
 
         return YearDashboardResponse(
             year             = if (fromDate.year == toDate.year) fromDate.year else null,
-            months           = months,
             yearTotals       = yearTotals,
             monthlyAverages  = monthlyAverages,
             activeMonthCount = activeMonthCount,
